@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>R.C Technical Institute — CO11 Attendance</title>
+<style>
+  :root{
+    --bg:#071022; --card:#071726; --muted:#9aa3b2;
+    --primary:#6b9cff; --success:#28a745; --warning:#ffb020; --destructive:#ef4444;
+    --glass: rgba(255,255,255,0.03);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:#e6eef8}
+  .page{max-width:1200px;margin:18px auto;padding:14px;position:relative;z-index:2}
+  .layout{display:grid;grid-template-columns:1fr 420px;gap:18px;align-items:start}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+  .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .title{font-weight:700;display:flex;gap:8px;align-items:center}
+  .muted{color:var(--muted);font-size:13px}
+  /* Recent attendance: fixed height so it doesn't push UI down */
+  #recentList{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:6px}
+  .rec-row{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:10px;background:rgba(255,255,255,0.012);border:1px solid rgba(255,255,255,0.02)}
+  .left{display:flex;gap:12px;align-items:center;min-width:0}
+  .avatar{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg, rgba(107,156,255,0.08), rgba(107,156,255,0.04));display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary)}
+  .student-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{color:var(--muted);font-size:13px}
+  .badge{padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px;border:1px solid rgba(255,255,255,0.03)}
+  .badge.present{background:rgba(40,167,69,0.08);color:var(--success);border-color:rgba(40,167,69,0.14)}
+  .badge.absent{background:rgba(239,68,68,0.08);color:var(--destructive);border-color:rgba(239,68,68,0.14)}
+  .badge.late{background:rgba(255,176,32,0.08);color:var(--warning);border-color:rgba(255,176,32,0.14)}
+  .controls{display:flex;gap:8px}
+  button{cursor:pointer;border-radius:8px;padding:8px 12px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-weight:700}
+  .btn-primary{background:linear-gradient(90deg,var(--primary), #4f7cf5);border:none;color:white}
+  .btn-ok{border:1px solid rgba(40,167,69,0.18);color:var(--success)}
+  .btn-warn{border:1px solid rgba(255,176,32,0.18);color:var(--warning)}
+  .btn-bad{border:1px solid rgba(239,68,68,0.18);color:var(--destructive)}
+  .btn-ghost{border:1px dashed rgba(255,255,255,0.04)}
+  input[type="text"]{flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+  .search-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+  /* master list styles */
+  .master-container{max-height:600px;overflow:auto;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)}
+  .master-item{display:flex;justify-content:space-between;gap:8px;padding:8px;border-radius:8px;align-items:center;cursor:pointer}
+  .master-item:hover{background:rgba(255,255,255,0.01)}
+  .master-highlight{outline:2px solid rgba(107,156,255,0.12);background:linear-gradient(90deg, rgba(107,156,255,0.02), transparent)}
+  .master-status{font-size:12px;color:var(--muted);min-width:84px;text-align:right}
+  /* found card sticky to top of middle column */
+  .found-area{position:sticky;top:16px;z-index:5;background:transparent}
+  .found-card{padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.02);box-shadow:0 8px 24px rgba(2,6,23,0.5)}
+  .found-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .footer-actions{display:flex;gap:8px;align-items:center;margin-top:12px}
+  /* edit popup */
+  .edit-pop{position:absolute;background:#071726;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 12px 30px rgba(0,0,0,0.7);z-index:80}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  .toast{position:fixed;right:20px;bottom:20px;background:rgba(0,0,0,0.7);padding:10px 14px;border-radius:10px;color:white;font-weight:700;z-index:100}
+  .done{padding:12px;border-radius:10px;background:linear-gradient(90deg, rgba(40,167,69,0.06), rgba(255,255,255,0.01));color:var(--success);font-weight:700}
+  .bg-anim{position:fixed;inset:0;pointer-events:none;opacity:0.08;z-index:1;overflow:hidden}
+  .sym{position:absolute;font-weight:900;mix-blend-mode:screen;transform:translate3d(0,0,0);will-change:transform,opacity}
+  @keyframes floatUp { from{ transform:translateY(100vh) rotate(0deg); opacity:0 } 20%{opacity:1} to{ transform:translateY(-20vh) rotate(360deg); opacity:0 } }
+  @media (max-width:980px){ .layout{grid-template-columns:1fr} .found-area{position:static} }
+</style>
+</head>
+<body>
+  <div class="bg-anim" aria-hidden="true" id="bgAnim"></div>
+
+  <div class="page">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div style="font-size:20px;font-weight:800">R.C Technical Institute — CO11 Attendance</div>
+      <div class="muted" style="margin-left:8px">Dean: <strong>aryan545@icloud.com</strong></div>
+    </div>
+
+    <div class="layout">
+      <div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header">
+            <div class="title">🕒 Recent Attendance</div>
+            <div class="muted">Most recent at top</div>
+          </div>
+          <div id="recentList"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="title">🔎 Search & Mark</div>
+            <div class="muted">Use the buttons to mark — no keyboard shortcuts</div>
+          </div>
+
+          <div class="search-row">
+            <input id="searchInput" type="text" placeholder="Enter enrollment number or student name..." />
+            <button id="searchBtn" class="btn-primary">Search</button>
+          </div>
+
+          <div id="foundArea" class="found-area">
+            <div class="muted small">Search for a student to begin.</div>
+          </div>
+
+          <div class="footer-actions">
+            <input id="deanEmail" type="text" placeholder="Dean email" style="padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit;width:320px" />
+            <button id="finalizeBtn" class="btn-ghost">📤 Finalize & Email to Dean</button>
+            <button id="downloadBtn" class="btn-ghost">⬇️ Download CSV</button>
+            <div style="margin-left:auto" class="muted small">Auto-advance: ON (skips marked)</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <div class="title">📋 Students (CO11)</div>
+            <div class="muted">Click to open in Mark pane</div>
+          </div>
+          <div class="master-container" id="masterContainer">
+            <div id="masterList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- Data ---------- */
+const realStudents = [
+  { enrollmentNumber: "COMP101", name: "AGRAVAT SUNNY HASMUKHBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP102", name: "AMIN VIDHI HARSIDDHKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP103", name: "ANSARIJULAYA MOHAMMAD TALHA", class: "CO11" },
+  { enrollmentNumber: "COMP105", name: "BADI MOHMADSALIK RASUL", class: "CO11" },
+  { enrollmentNumber: "COMP106", name: "BARAD PRIYABEN SURESHBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP108", name: "BAROT SHLOK NAYANKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP109", name: "BASANTANI SUMIT GOPICHAND", class: "CO11" },
+  { enrollmentNumber: "COMP110", name: "BHAND YASH SUBHASHCHANDRA", class: "CO11" },
+  { enrollmentNumber: "COMP111", name: "BHARVAD HARDIK BHIMABHAI", class: "CO11" },
+  { enrollmentNumber: "COMP113", name: "BHATIYA DEEP BHAVESHBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP114", name: "BHURIYA HETVI YOGESHKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP115", name: "BRAHMBHATT JIYA BHAVESH", class: "CO11" },
+  { enrollmentNumber: "COMP116", name: "BUHA SNEH GIRISHBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP117", name: "BUKHARI ALISHAN ALIRAZA", class: "CO11" },
+  { enrollmentNumber: "COMP118", name: "BUKHARI TABISH MAHEDI ALIRAZA", class: "CO11" },
+  { enrollmentNumber: "COMP120", name: "CHAUHAN ASHISHBHAI KANTIBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP122", name: "CHAUHAN JAHNAVI SOHAGKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP123", name: "CHAUHAN KARAN GUNVANTBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP124", name: "CHAUHAN RISHI BHUPENDRABHAI", class: "CO11" },
+  { enrollmentNumber: "COMP127", name: "CHAUHAN USMITA MAHESHJI", class: "CO11" },
+  { enrollmentNumber: "COMP129", name: "CHAVADA PRATIK KISHANSINH", class: "CO11" },
+  { enrollmentNumber: "COMP130", name: "CHHODBADIA DEEP MEHULKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP131", name: "DABHI MITRAJSINH SANJAYSINH", class: "CO11" },
+  { enrollmentNumber: "COMP132", name: "DANAK VATSAL JANAKKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP134", name: "DARJI ASHVINI SURESHKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP135", name: "DARJI AYUSH MAHESHBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP136", name: "DARJI JAL VINODBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP137", name: "DARJI JAY MANISHBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP139", name: "DARJI SHLOK JITENDRAKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP140", name: "DARJI SIDDHIBEN KANTIBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP141", name: "DAVE AAYUSH MEHULBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP143", name: "DAVE DHRUV JITENDRAKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP144", name: "DAVE KHWAISH MEHUL", class: "CO11" },
+  { enrollmentNumber: "COMP145", name: "DAVE SHIVAM RUPESHKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP146", name: "DEDAKIYA JAYMIN NAYANBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP147", name: "DESAI ANKESHKUMAR MERAJBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP148", name: "DESAI ISHAN NARANBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP149", name: "DESAI PRAKASHBHAI RANABHAI", class: "CO11" },
+  { enrollmentNumber: "COMP150", name: "DHOBI HARSH SACHINKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP151", name: "DHOKIYA SHLOKKUMAR ARAVINDBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP152", name: "DHRUVESH PATEL", class: "CO11" },
+  { enrollmentNumber: "COMP153", name: "DIVYESH MITESH CHHATBAR", class: "CO11" },
+  { enrollmentNumber: "COMP154", name: "DIWAN AKSHAY AMIT", class: "CO11" },
+  { enrollmentNumber: "COMP155", name: "DIWAN REHAN AHMED MO. JAVED", class: "CO11" },
+  { enrollmentNumber: "COMP156", name: "DOMADIYA MEET SHAILESHBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP157", name: "DOMADIYA MOHIT RATILAL", class: "CO11" },
+  { enrollmentNumber: "COMP158", name: "DONGA YUG VIPULBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP160", name: "GADHAVI TWISHA VIJAYDAN", class: "CO11" },
+  { enrollmentNumber: "COMP162", name: "GAJJAR RUDRA MAULIK", class: "CO11" },
+  { enrollmentNumber: "COMP163", name: "GAUTAM SHUBHAM SATYAPRAKASH", class: "CO11" },
+  { enrollmentNumber: "COMP164", name: "GORE SAKSHI VILAS", class: "CO11" },
+  { enrollmentNumber: "COMP165", name: "GORECHA SHUBHAM HIRENKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP167", name: "GOTHI KULDEEPKUMAR DHARMENDRA", class: "CO11" },
+  { enrollmentNumber: "COMP168", name: "GUPTA VANSHIK PARESHKUMAR", class: "CO11" },
+  { enrollmentNumber: "COMP169", name: "GURJAR PARTHKUMAR DEVRAMBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP171", name: "HENIL PARIKH", class: "CO11" },
+  { enrollmentNumber: "COMP172", name: "JADAV VAIDIK VIJAYBHAI", class: "CO11" },
+  { enrollmentNumber: "COMP173", name: "JAIN DARSHIL JITENDRA", class: "CO11" },
+];
+
+/* start with empty recentAttendance */
+let recentAttendance = [];
+
+/* ---------- DOM refs ---------- */
+const recentList = document.getElementById('recentList');
+const masterList = document.getElementById('masterList');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const foundArea = document.getElementById('foundArea');
+const downloadBtn = document.getElementById('downloadBtn');
+const finalizeBtn = document.getElementById('finalizeBtn');
+const deanEmailInput = document.getElementById('deanEmail');
+
+deanEmailInput.value = "aryan545@icloud.com";
+
+/* ---------- Renderers ---------- */
+function renderRecent(){
+  recentList.innerHTML = '';
+  if(recentAttendance.length === 0){
+    recentList.innerHTML = `<div class="muted">No attendance marked yet.</div>`;
+    return;
+  }
+  recentAttendance.forEach((rec)=>{
+    const row = document.createElement('div'); row.className='rec-row';
+    const left = document.createElement('div'); left.className='left';
+    const avatar = document.createElement('div'); avatar.className='avatar'; avatar.textContent = initials(rec.studentName);
+    const info = document.createElement('div'); info.style.minWidth='0';
+    const name = document.createElement('div'); name.className='student-name'; name.textContent = rec.studentName;
+    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `${rec.enrollmentNumber} • ${rec.timestamp || ''}`;
+    info.appendChild(name); info.appendChild(meta);
+    left.appendChild(avatar); left.appendChild(info);
+
+    const right = document.createElement('div'); right.style.display='flex'; right.style.alignItems='center'; right.style.gap='8px';
+    const badge = document.createElement('div'); badge.className = 'badge ' + (rec.status || '').toLowerCase();
+    badge.textContent = rec.status ? capitalize(rec.status) : 'Not marked';
+
+    // Edit button
+    const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.className='btn-ghost';
+    editBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openEditPopup(rec.enrollmentNumber, editBtn); });
+
+    right.appendChild(badge); right.appendChild(editBtn);
+
+    row.appendChild(left); row.appendChild(right);
+    recentList.appendChild(row);
+  });
+}
+
+function renderMasterList(){
+  masterList.innerHTML = '';
+  realStudents.forEach(s=>{
+    const div = document.createElement('div'); div.className='master-item'; div.id = `master-${s.enrollmentNumber}`;
+    const left = document.createElement('div'); left.style.display='flex'; left.style.gap='8px'; left.style.alignItems='center';
+    const av = document.createElement('div'); av.style.width='36px'; av.style.height='36px'; av.style.borderRadius='8px'; av.style.display='flex'; av.style.alignItems='center'; av.style.justifyContent='center'; av.style.fontWeight='700'; av.style.color='var(--primary)'; av.textContent = initials(s.name); av.style.background='linear-gradient(180deg, rgba(107,156,255,0.04), transparent)';
+    const txt = document.createElement('div'); txt.style.minWidth='0'; txt.innerHTML = `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div><div class="meta" style="margin-top:4px">${s.enrollmentNumber}</div>`;
+    left.appendChild(av); left.appendChild(txt);
+
+    const status = document.createElement('div'); status.className = 'master-status'; status.id = `status-${s.enrollmentNumber}`; status.textContent = getStudentStatus(s.enrollmentNumber);
+
+    div.appendChild(left); div.appendChild(status);
+    div.addEventListener('click', ()=>{ searchInput.value = s.enrollmentNumber; showFound(s); });
+    masterList.appendChild(div);
+  });
+}
+
+/* ---------- Search + Found ---------- */
+function findStudent(q){
+  if(!q) return null;
+  q = q.toLowerCase().trim();
+  return realStudents.find(s => s.enrollmentNumber.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) || null;
+}
+
+function showFound(student){
+  foundArea.innerHTML = '';
+  clearMasterHighlights();
+  if(!student){
+    foundArea.innerHTML = `<div class="muted small">No student found. Try different text.</div>`;
+    return;
+  }
+  const masterEl = document.getElementById(`master-${student.enrollmentNumber}`);
+  if(masterEl){ masterEl.classList.add('master-highlight'); masterEl.scrollIntoView({behavior:'smooth', block:'center'}); }
+
+  const card = document.createElement('div'); card.className='found-card';
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="avatar" style="width:64px;height:64px;border-radius:10px">${initials(student.name)}</div>
+        <div>
+          <div style="font-weight:800">${student.name}</div>
+          <div class="meta">${student.enrollmentNumber} • Class ${student.class}</div>
+        </div>
+      </div>
+      <div id="statusBadge" class="badge">${getStudentStatus(student.enrollmentNumber)}</div>
+    </div>
+    <div class="found-actions">
+      <button class="btn-ok" data-action="present">✅ Present</button>
+      <button class="btn-warn" data-action="late">⏰ Late</button>
+      <button class="btn-bad" data-action="absent">❌ Absent</button>
+      <button class="btn-ghost" data-action="clear">↩️ Clear</button>
+      <button class="btn-primary" id="nextBtn">Next ➜</button>
+      <button class="btn-ghost" id="undoBtn">⤺ Undo</button>
+    </div>
+  `;
+  foundArea.appendChild(card);
+
+  card.querySelectorAll('button[data-action]').forEach(btn=>{
+    btn.addEventListener('click', ()=> {
+      const action = btn.getAttribute('data-action');
+      if(action === 'clear'){ clearMark(student); return; }
+      markAttendance(student, action);
+    });
+  });
+
+  // Next button: moves to next unmarked student
+  card.querySelector('#nextBtn').addEventListener('click', ()=> autoAdvanceToNext(student.enrollmentNumber));
+
+  // Undo: clear mark for this student
+  card.querySelector('#undoBtn').addEventListener('click', ()=> { clearMark(student); showToast('Cleared mark (undo)'); });
+
+  // focus search input for quick typing
+  searchInput.focus();
+}
+
+/* ---------- Status helpers ---------- */
+function getStudentStatus(enr){
+  const found = recentAttendance.find(r=>r.enrollmentNumber === enr);
+  return found ? (found.status || 'Not marked') : 'Not marked';
+}
+
+function updateMasterStatus(enr){
+  const el = document.getElementById(`status-${enr}`);
+  if(el) el.textContent = getStudentStatus(enr);
+  const masterEl = document.getElementById(`master-${enr}`);
+  if(masterEl){
+    masterEl.classList.add('master-highlight');
+    setTimeout(()=> masterEl.classList.remove('master-highlight'), 700);
+  }
+}
+
+/* ---------- Marking & Auto-advance ---------- */
+function markAttendance(student, status){
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  const existing = recentAttendance.find(r=>r.enrollmentNumber === student.enrollmentNumber);
+  if(existing){
+    existing.status = status;
+    existing.timestamp = status === 'absent' ? 'Not marked' : timeStr;
+  } else {
+    recentAttendance.unshift({
+      id: String(Date.now()),
+      studentName: student.name,
+      enrollmentNumber: student.enrollmentNumber,
+      class: student.class,
+      status,
+      timestamp: status === 'absent' ? 'Not marked' : timeStr
+    });
+    recentAttendance = recentAttendance.slice(0,500);
+  }
+
+  renderRecent();
+  const badge = document.getElementById('statusBadge');
+  if(badge){ badge.textContent = capitalize(status); badge.className = 'badge ' + status; }
+  updateMasterStatus(student.enrollmentNumber);
+  showToast(`Marked ${student.name} as ${status}`);
+
+  // Auto-advance
+  autoAdvanceToNext(student.enrollmentNumber);
+}
+
+function clearMark(student){
+  recentAttendance = recentAttendance.filter(r => r.enrollmentNumber !== student.enrollmentNumber);
+  renderRecent();
+  const badge = document.getElementById('statusBadge');
+  if(badge){ badge.textContent = 'Not marked'; badge.className = 'badge'; }
+  updateMasterStatus(student.enrollmentNumber);
+}
+
+/* Auto-advance: find next unmarked student (strict) */
+function autoAdvanceToNext(currentEnrollment){
+  const markedSet = new Set(recentAttendance.map(r=>r.enrollmentNumber));
+  const idx = realStudents.findIndex(s => s.enrollmentNumber === currentEnrollment);
+  for(let i = idx + 1; i < realStudents.length; i++){
+    if(!markedSet.has(realStudents[i].enrollmentNumber)){
+      searchInput.value = realStudents[i].enrollmentNumber;
+      showFound(realStudents[i]);
+      return;
+    }
+  }
+  for(let i = 0; i <= idx; i++){
+    if(!markedSet.has(realStudents[i].enrollmentNumber)){
+      searchInput.value = realStudents[i].enrollmentNumber;
+      showFound(realStudents[i]);
+      return;
+    }
+  }
+  searchInput.value = '';
+  foundArea.innerHTML = `<div class="done">All students processed. Download CSV or finalize email.</div>`;
+}
+
+/* ---------- Edit popup ---------- */
+let activePopup = null;
+function openEditPopup(enrollmentNumber, anchorEl){
+  closeEditPopup();
+  const rect = anchorEl.getBoundingClientRect();
+  const popup = document.createElement('div'); popup.className='edit-pop';
+  popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+  popup.style.left = (rect.left + window.scrollX) + 'px';
+  popup.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn-ok" data-action="present">Present</button>
+      <button class="btn-warn" data-action="late">Late</button>
+      <button class="btn-bad" data-action="absent">Absent</button>
+      <button class="btn-ghost" data-action="clear">Clear</button>
+    </div>
+  `;
+  document.body.appendChild(popup);
+  activePopup = popup;
+  popup.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const a = b.getAttribute('data-action');
+      const student = realStudents.find(s=>s.enrollmentNumber === enrollmentNumber);
+      if(!student) return;
+      if(a === 'clear') clearMark(student);
+      else markAttendance(student, a);
+      closeEditPopup();
+    });
+  });
+  setTimeout(()=> window.addEventListener('click', popupOutsideClick));
+}
+function popupOutsideClick(e){ if(activePopup && !activePopup.contains(e.target)) closeEditPopup(); }
+function closeEditPopup(){ if(activePopup){ activePopup.remove(); activePopup = null; window.removeEventListener('click', popupOutsideClick); } }
+
+/* ---------- CSV & Mail ---------- */
+function buildAttendanceSnapshot(){
+  const map = new Map(recentAttendance.map(r => [r.enrollmentNumber, r]));
+  const rows = realStudents.map(s=>{
+    const r = map.get(s.enrollmentNumber);
+    return {
+      enrollmentNumber: s.enrollmentNumber,
+      name: s.name,
+      class: s.class,
+      status: r ? (r.status || 'Not marked') : 'Not marked',
+      timestamp: r ? r.timestamp : ''
+    };
+  });
+  return rows;
+}
+function toCSV(rows){
+  const header = ['EnrollmentNumber','Name','Class','Status','Timestamp'];
+  const csv = [header.join(',')].concat(rows.map(r=>{
+    function q(v){ if(v==null) return ''; return '"'+String(v).replace(/"/g,'""')+'"'; }
+    return [q(r.enrollmentNumber), q(r.name), q(r.class), q(r.status), q(r.timestamp)].join(',');
+  }));
+  return csv.join('\n');
+}
+function downloadCSV(filename='attendance_co11.csv'){
+  const rows = buildAttendanceSnapshot();
+  const csv = toCSV(rows);
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 5000);
+  return csv;
+}
+function summarizeCounts(){
+  const rows = buildAttendanceSnapshot();
+  let present=0, absent=0, late=0, notMarked=0;
+  rows.forEach(r=>{
+    if(r.status === 'present') present++;
+    else if(r.status === 'absent') absent++;
+    else if(r.status === 'late') late++;
+    else notMarked++;
+  });
+  return {present, absent, late, notMarked};
+}
+function openMailToDean(){
+  const dean = deanEmailInput.value.trim() || 'aryan545@icloud.com';
+  const counts = summarizeCounts();
+  const subject = encodeURIComponent('Final Attendance — CO11 (R.C Technical Institute)');
+  const bodyLines = [
+    `Dear Dean,`,
+    ``,
+    `Please find the final attendance summary for class CO11 below:`,
+    `Present: ${counts.present}`,
+    `Late: ${counts.late}`,
+    `Absent: ${counts.absent}`,
+    `Not marked: ${counts.notMarked}`,
+    ``,
+    `I have downloaded the full CSV (attached file) — please attach it to this mail before sending if your client needs a separate attachment.`,
+    ``,
+    `Regards,`,
+    `Instructor`
+  ];
+  const body = encodeURIComponent(bodyLines.join('\n'));
+  window.location.href = `mailto:${encodeURIComponent(dean)}?subject=${subject}&body=${body}`;
+}
+
+/* ---------- Utils ---------- */
+function initials(name){ return name.split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase(); }
+function capitalize(s){ if(!s) return ''; return s[0].toUpperCase()+s.slice(1); }
+function showToast(msg){ const t = document.createElement('div'); t.className='toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(()=> t.style.opacity='0',1600); setTimeout(()=> t.remove(),2100); }
+function clearMasterHighlights(){ document.querySelectorAll('.master-highlight').forEach(el=>el.classList.remove('master-highlight')); }
+
+/* ---------- Init & Events ---------- */
+renderMasterList();
+renderRecent();
+
+document.getElementById('searchBtn').addEventListener('click', ()=>{
+  const q = searchInput.value.trim();
+  if(!q) return showToast('Type enrollment number or name');
+  const s = findStudent(q);
+  if(!s) { showToast('Student not found'); return; }
+  showFound(s);
+});
+searchInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ document.getElementById('searchBtn').click(); } });
+
+downloadBtn.addEventListener('click', ()=>{ downloadCSV(); showToast('CSV downloaded'); });
+finalizeBtn.addEventListener('click', ()=>{ downloadCSV(); showToast('CSV downloaded — opening mail client'); openMailToDean(); });
+
+document.getElementById('masterContainer').addEventListener('scroll', closeEditPopup);
+window.addEventListener('resize', closeEditPopup);
+
+/* ---------- Background animated symbols ---------- */
+const symbols = ['C', 'C++', 'Python', 'int', '{ }', ';', '<>', '()'];
+const bg = document.getElementById('bgAnim');
+for(let i=0;i<24;i++){
+  const el = document.createElement('div'); el.className='sym';
+  el.style.left = (Math.random()*100)+'%';
+  el.style.fontSize = (12 + Math.random()*48) + 'px';
+  el.style.opacity = (0.05 + Math.random()*0.12);
+  el.style.transform = `translateY(${80 + Math.random()*40}vh)`;
+  el.style.animation = `floatUp ${12 + Math.random()*18}s linear ${Math.random()*-6}s infinite`;
+  el.textContent = symbols[Math.floor(Math.random()*symbols.length)];
+  bg.appendChild(el);
+}
+
+/* ensure empty start */
+recentAttendance = []; renderRecent();
+</script>
+</body>
+</html>
