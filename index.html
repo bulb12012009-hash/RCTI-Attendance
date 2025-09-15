@@ -3,75 +3,84 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>R.C Technical Institute — CO11 Attendance</title>
+<title>R.C Technical Institute — CO11 Attendance (Subject-wise — Fixed)</title>
+<!-- html2canvas + jsPDF (CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
-    --bg:#071022; --card:#071726; --muted:#9aa3b2;
-    --primary:#6b9cff; --success:#28a745; --warning:#ffb020; --destructive:#ef4444;
-    --glass: rgba(255,255,255,0.03);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --bg:#0b1220; --muted:#9fb0c8;
+    --accent:#6b9cff; --accent-2:#3b82f6;
+    --white:#eaf3ff; --green:#28a745; --amber:#ffb020; --red:#ef4444;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   }
-  html,body{height:100%;margin:0;background:var(--bg);color:#e6eef8}
-  .page{max-width:1200px;margin:18px auto;padding:14px;position:relative;z-index:2}
-  .layout{display:grid;grid-template-columns:1fr 420px;gap:18px;align-items:start}
-  .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
-  .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-  .title{font-weight:700;display:flex;gap:8px;align-items:center}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#051025 0%, #071426 60%);color:var(--white);-webkit-font-smoothing:antialiased}
+  .page{max-width:1200px;margin:20px auto;padding:18px}
+  header{display:flex;gap:14px;align-items:center;margin-bottom:16px}
+  h1{margin:0;font-size:18px}
   .muted{color:var(--muted);font-size:13px}
-  /* Recent attendance: fixed height so it doesn't push UI down */
+
+  .layout{display:grid;grid-template-columns:1fr 420px;gap:18px}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,0.03)}
+  .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .title{font-weight:800}
+
   #recentList{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:6px}
-  .rec-row{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:10px;background:rgba(255,255,255,0.012);border:1px solid rgba(255,255,255,0.02)}
+  .rec-row{display:flex;justify-content:space-between;gap:12px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.01);align-items:center}
   .left{display:flex;gap:12px;align-items:center;min-width:0}
-  .avatar{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg, rgba(107,156,255,0.08), rgba(107,156,255,0.04));display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary)}
-  .student-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .avatar{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg, rgba(107,156,255,0.12), rgba(59,130,246,0.06));display:flex;align-items:center;justify-content:center;font-weight:800;color:white}
+  .student-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .meta{color:var(--muted);font-size:13px}
   .badge{padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px;border:1px solid rgba(255,255,255,0.03)}
-  .badge.present{background:rgba(40,167,69,0.08);color:var(--success);border-color:rgba(40,167,69,0.14)}
-  .badge.absent{background:rgba(239,68,68,0.08);color:var(--destructive);border-color:rgba(239,68,68,0.14)}
-  .badge.late{background:rgba(255,176,32,0.08);color:var(--warning);border-color:rgba(255,176,32,0.14)}
+  .badge.present{background:rgba(40,167,69,0.08);color:var(--green)}
+  .badge.absent{background:rgba(239,68,68,0.08);color:var(--red)}
+  .badge.late{background:rgba(255,176,32,0.08);color:var(--amber)}
+
   .controls{display:flex;gap:8px}
-  button{cursor:pointer;border-radius:8px;padding:8px 12px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-weight:700}
-  .btn-primary{background:linear-gradient(90deg,var(--primary), #4f7cf5);border:none;color:white}
-  .btn-ok{border:1px solid rgba(40,167,69,0.18);color:var(--success)}
-  .btn-warn{border:1px solid rgba(255,176,32,0.18);color:var(--warning)}
-  .btn-bad{border:1px solid rgba(239,68,68,0.18);color:var(--destructive)}
-  .btn-ghost{border:1px dashed rgba(255,255,255,0.04)}
-  input[type="text"]{flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
-  .search-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-  /* master list styles */
-  .master-container{max-height:600px;overflow:auto;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)}
-  .master-item{display:flex;justify-content:space-between;gap:8px;padding:8px;border-radius:8px;align-items:center;cursor:pointer}
+  button{cursor:pointer;border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-weight:800}
+  .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));border:none;color:white}
+  .btn-ok{border-color:rgba(40,167,69,0.18);color:var(--green)}
+  .btn-warn{border-color:rgba(255,176,32,0.18);color:var(--amber)}
+  .btn-bad{border-color:rgba(239,68,68,0.18);color:var(--red)}
+  .btn-ghost{border:1px dashed rgba(255,255,255,0.06)}
+  input[type="text"], select{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:inherit}
+
+  .master-container{max-height:720px;overflow:auto;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)}
+  .master-item{display:flex;justify-content:space-between;gap:8px;padding:10px;border-radius:8px;align-items:center;cursor:pointer}
   .master-item:hover{background:rgba(255,255,255,0.01)}
-  .master-highlight{outline:2px solid rgba(107,156,255,0.12);background:linear-gradient(90deg, rgba(107,156,255,0.02), transparent)}
-  .master-status{font-size:12px;color:var(--muted);min-width:84px;text-align:right}
-  /* found card sticky to top of middle column */
-  .found-area{position:sticky;top:16px;z-index:5;background:transparent}
-  .found-card{padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.02);box-shadow:0 8px 24px rgba(2,6,23,0.5)}
-  .found-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-  .footer-actions{display:flex;gap:8px;align-items:center;margin-top:12px}
-  /* edit popup */
-  .edit-pop{position:absolute;background:#071726;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 12px 30px rgba(0,0,0,0.7);z-index:80}
-  .hint{font-size:12px;color:var(--muted);margin-top:8px}
-  .toast{position:fixed;right:20px;bottom:20px;background:rgba(0,0,0,0.7);padding:10px 14px;border-radius:10px;color:white;font-weight:700;z-index:100}
-  .done{padding:12px;border-radius:10px;background:linear-gradient(90deg, rgba(40,167,69,0.06), rgba(255,255,255,0.01));color:var(--success);font-weight:700}
-  .bg-anim{position:fixed;inset:0;pointer-events:none;opacity:0.08;z-index:1;overflow:hidden}
-  .sym{position:absolute;font-weight:900;mix-blend-mode:screen;transform:translate3d(0,0,0);will-change:transform,opacity}
-  @keyframes floatUp { from{ transform:translateY(100vh) rotate(0deg); opacity:0 } 20%{opacity:1} to{ transform:translateY(-20vh) rotate(360deg); opacity:0 } }
-  @media (max-width:980px){ .layout{grid-template-columns:1fr} .found-area{position:static} }
+  .master-left{display:flex;gap:10px;align-items:center;min-width:0}
+  .master-status{font-size:13px;color:var(--muted);min-width:120px;text-align:right}
+  .progress{width:120px;height:8px;border-radius:999px;background:rgba(255,255,255,0.03);overflow:hidden}
+  .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));}
+
+  .found-card{padding:12px;border-radius:10px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02)}
+  .subject-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .sub-pill{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.02);cursor:pointer;font-weight:700;border:1px solid rgba(255,255,255,0.03)}
+  .sub-pill.active{outline:2px solid rgba(107,156,255,0.12);background:linear-gradient(90deg, rgba(107,156,255,0.06), rgba(59,130,246,0.03))}
+
+  #printArea{position:fixed;left:-9999px;top:-9999px;width:794px;background:white;color:#111;padding:18px}
+  #printArea h2{margin-top:0}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  table th, table td{padding:6px;border:1px solid #ddd}
+  .toast{position:fixed;right:20px;bottom:20px;background:rgba(0,0,0,0.8);padding:10px 14px;border-radius:8px;color:white;font-weight:700}
+
+  @media (max-width:980px){ .layout{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
-  <div class="bg-anim" aria-hidden="true" id="bgAnim"></div>
-
   <div class="page">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-      <div style="font-size:20px;font-weight:800">R.C Technical Institute — CO11 Attendance</div>
-      <div class="muted" style="margin-left:8px">Dean: <strong>aryan545@icloud.com</strong></div>
-    </div>
+    <header>
+      <div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#6b9cff,#3b82f6);display:flex;align-items:center;justify-content:center;font-weight:900">RC</div>
+      <div>
+        <h1>R.C Technical Institute — CO11 Attendance (Subject-wise)</h1>
+        <div class="muted">Select a subject then search & mark students. Click subject pills to switch fast.</div>
+      </div>
+    </header>
 
     <div class="layout">
       <div>
-        <div class="card" style="margin-bottom:14px">
+        <div class="card" style="margin-bottom:12px">
           <div class="card-header">
             <div class="title">🕒 Recent Attendance</div>
             <div class="muted">Most recent at top</div>
@@ -80,148 +89,205 @@
         </div>
 
         <div class="card">
-          <div class="card-header">
-            <div class="title">🔎 Search & Mark</div>
-            <div class="muted">Use the buttons to mark — no keyboard shortcuts</div>
-          </div>
+          <div class="card-header"><div class="title">🔎 Search & Mark</div><div class="muted">Pick subject → search → mark</div></div>
 
-          <div class="search-row">
-            <input id="searchInput" type="text" placeholder="Enter enrollment number or student name..." />
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+            <select id="subjectSelect" style="width:220px"></select>
+            <input id="searchInput" type="text" placeholder="Enrollment or student name..." />
             <button id="searchBtn" class="btn-primary">Search</button>
           </div>
 
-          <div id="foundArea" class="found-area">
-            <div class="muted small">Search for a student to begin.</div>
-          </div>
+          <div id="foundArea"><div class="muted">Select subject and search for a student to begin.</div></div>
 
-          <div class="footer-actions">
-            <input id="deanEmail" type="text" placeholder="Dean email" style="padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit;width:320px" />
-            <button id="finalizeBtn" class="btn-ghost">📤 Finalize & Email to Dean</button>
-            <button id="downloadBtn" class="btn-ghost">⬇️ Download CSV</button>
-            <div style="margin-left:auto" class="muted small">Auto-advance: ON (skips marked)</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
+            <input id="deanEmail" type="text" placeholder="Dean email" style="width:320px;padding:10px;border-radius:8px" />
+            <button id="finalizeBtn" class="btn-ghost">📤 Finalize & Email</button>
+            <button id="downloadPdfBtn" class="btn-ghost">⬇️ Download PDF</button>
+            <div style="margin-left:auto" class="muted">Auto-advance: ON</div>
           </div>
         </div>
       </div>
 
       <div>
         <div class="card">
-          <div class="card-header">
-            <div class="title">📋 Students (CO11)</div>
-            <div class="muted">Click to open in Mark pane</div>
-          </div>
-          <div class="master-container" id="masterContainer">
-            <div id="masterList"></div>
-          </div>
+          <div class="card-header"><div class="title">📋 Students (CO11)</div><div class="muted">Click a student to open mark pane</div></div>
+          <div class="master-container" id="masterContainer"><div id="masterList"></div></div>
         </div>
       </div>
     </div>
   </div>
 
+  <div id="printArea" aria-hidden="true"></div>
+
 <script>
-/* ---------- Data ---------- */
+/* ---------- Subjects ---------- */
+const SUBJECTS = ['CPF','MATHS','PHYSICS','BE','ENGLISH','CBSWPD'];
+
+/* ---------- Students (your supplied list) ---------- */
 const realStudents = [
-  { enrollmentNumber: "COMP101", name: "AGRAVAT SUNNY HASMUKHBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP102", name: "AMIN VIDHI HARSIDDHKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP103", name: "ANSARIJULAYA MOHAMMAD TALHA", class: "CO11" },
-  { enrollmentNumber: "COMP105", name: "BADI MOHMADSALIK RASUL", class: "CO11" },
-  { enrollmentNumber: "COMP106", name: "BARAD PRIYABEN SURESHBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP108", name: "BAROT SHLOK NAYANKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP109", name: "BASANTANI SUMIT GOPICHAND", class: "CO11" },
-  { enrollmentNumber: "COMP110", name: "BHAND YASH SUBHASHCHANDRA", class: "CO11" },
-  { enrollmentNumber: "COMP111", name: "BHARVAD HARDIK BHIMABHAI", class: "CO11" },
-  { enrollmentNumber: "COMP113", name: "BHATIYA DEEP BHAVESHBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP114", name: "BHURIYA HETVI YOGESHKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP115", name: "BRAHMBHATT JIYA BHAVESH", class: "CO11" },
-  { enrollmentNumber: "COMP116", name: "BUHA SNEH GIRISHBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP117", name: "BUKHARI ALISHAN ALIRAZA", class: "CO11" },
-  { enrollmentNumber: "COMP118", name: "BUKHARI TABISH MAHEDI ALIRAZA", class: "CO11" },
-  { enrollmentNumber: "COMP120", name: "CHAUHAN ASHISHBHAI KANTIBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP122", name: "CHAUHAN JAHNAVI SOHAGKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP123", name: "CHAUHAN KARAN GUNVANTBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP124", name: "CHAUHAN RISHI BHUPENDRABHAI", class: "CO11" },
-  { enrollmentNumber: "COMP127", name: "CHAUHAN USMITA MAHESHJI", class: "CO11" },
-  { enrollmentNumber: "COMP129", name: "CHAVADA PRATIK KISHANSINH", class: "CO11" },
-  { enrollmentNumber: "COMP130", name: "CHHODBADIA DEEP MEHULKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP131", name: "DABHI MITRAJSINH SANJAYSINH", class: "CO11" },
-  { enrollmentNumber: "COMP132", name: "DANAK VATSAL JANAKKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP134", name: "DARJI ASHVINI SURESHKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP135", name: "DARJI AYUSH MAHESHBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP136", name: "DARJI JAL VINODBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP137", name: "DARJI JAY MANISHBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP139", name: "DARJI SHLOK JITENDRAKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP140", name: "DARJI SIDDHIBEN KANTIBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP141", name: "DAVE AAYUSH MEHULBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP143", name: "DAVE DHRUV JITENDRAKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP144", name: "DAVE KHWAISH MEHUL", class: "CO11" },
-  { enrollmentNumber: "COMP145", name: "DAVE SHIVAM RUPESHKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP146", name: "DEDAKIYA JAYMIN NAYANBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP147", name: "DESAI ANKESHKUMAR MERAJBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP148", name: "DESAI ISHAN NARANBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP149", name: "DESAI PRAKASHBHAI RANABHAI", class: "CO11" },
-  { enrollmentNumber: "COMP150", name: "DHOBI HARSH SACHINKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP151", name: "DHOKIYA SHLOKKUMAR ARAVINDBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP152", name: "DHRUVESH PATEL", class: "CO11" },
-  { enrollmentNumber: "COMP153", name: "DIVYESH MITESH CHHATBAR", class: "CO11" },
-  { enrollmentNumber: "COMP154", name: "DIWAN AKSHAY AMIT", class: "CO11" },
-  { enrollmentNumber: "COMP155", name: "DIWAN REHAN AHMED MO. JAVED", class: "CO11" },
-  { enrollmentNumber: "COMP156", name: "DOMADIYA MEET SHAILESHBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP157", name: "DOMADIYA MOHIT RATILAL", class: "CO11" },
-  { enrollmentNumber: "COMP158", name: "DONGA YUG VIPULBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP160", name: "GADHAVI TWISHA VIJAYDAN", class: "CO11" },
-  { enrollmentNumber: "COMP162", name: "GAJJAR RUDRA MAULIK", class: "CO11" },
-  { enrollmentNumber: "COMP163", name: "GAUTAM SHUBHAM SATYAPRAKASH", class: "CO11" },
-  { enrollmentNumber: "COMP164", name: "GORE SAKSHI VILAS", class: "CO11" },
-  { enrollmentNumber: "COMP165", name: "GORECHA SHUBHAM HIRENKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP167", name: "GOTHI KULDEEPKUMAR DHARMENDRA", class: "CO11" },
-  { enrollmentNumber: "COMP168", name: "GUPTA VANSHIK PARESHKUMAR", class: "CO11" },
-  { enrollmentNumber: "COMP169", name: "GURJAR PARTHKUMAR DEVRAMBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP171", name: "HENIL PARIKH", class: "CO11" },
-  { enrollmentNumber: "COMP172", name: "JADAV VAIDIK VIJAYBHAI", class: "CO11" },
-  { enrollmentNumber: "COMP173", name: "JAIN DARSHIL JITENDRA", class: "CO11" },
+  { enrollmentNumber: "COMP101", name: "AGRAVAT SUNNY HASMUKHBHAI", class: "CO11", total: "4 / 7" },
+  { enrollmentNumber: "COMP102", name: "AMIN VIDHI HARSIDDHKUMAR", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP103", name: "ANSARIJULAYA MOHAMMAD TALHA", class: "CO11", total: "2 / 7" },
+  { enrollmentNumber: "COMP105", name: "BADI MOHMADSALIK RASUL", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP106", name: "BARAD PRIYABEN SURESHBHAI", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP108", name: "BAROT SHLOK NAYANKUMAR", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP109", name: "BASANTANI SUMIT GOPICHAND", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP110", name: "BHAND YASH SUBHASHCHANDRA", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP111", name: "BHARVAD HARDIK BHIMABHAI", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP113", name: "BHATIYA DEEP BHAVESHBHAI", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP114", name: "BHURIYA HETVI YOGESHKUMAR", class: "CO11", total: "4 / 7" },
+  { enrollmentNumber: "COMP115", name: "BRAHMBHATT JIYA BHAVESH", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP116", name: "BUHA SNEH GIRISHBHAI", class: "CO11", total: "1 / 7" },
+  { enrollmentNumber: "COMP117", name: "BUKHARI ALISHAN ALIRAZA", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP118", name: "BUKHARI TABISH MAHEDI ALIRAZA", class: "CO11", total: "2 / 7" },
+  { enrollmentNumber: "COMP120", name: "CHAUHAN ASHISHBHAI KANTIBHAI", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP122", name: "CHAUHAN JAHNAVI SOHAGKUMAR", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP123", name: "CHAUHAN KARAN GUNVANTBHAI", class: "CO11", total: "1 / 7" },
+  { enrollmentNumber: "COMP124", name: "CHAUHAN RISHI BHUPENDRABHAI", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP127", name: "CHAUHAN USMITA MAHESHJI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP129", name: "CHAVADA PRATIK KISHANSINH", class: "CO11", total: "4 / 7" },
+  { enrollmentNumber: "COMP130", name: "CHHODBADIA DEEP MEHULKUMAR", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP131", name: "DABHI MITRAJSINH SANJAYSINH", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP132", name: "DANAK VATSAL JANAKKUMAR", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP134", name: "DARJI ASHVINI SURESHKUMAR", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP135", name: "DARJI AYUSH MAHESHBHAI", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP136", name: "DARJI JAL VINODBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP137", name: "DARJI JAY MANISHBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP139", name: "DARJI SHLOK JITENDRAKUMAR", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP140", name: "DARJI SIDDHIBEN KANTIBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP141", name: "DAVE AAYUSH MEHULBHAI", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP143", name: "DAVE DHRUV JITENDRAKUMAR", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP144", name: "DAVE KHWAISH MEHUL", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP145", name: "DAVE SHIVAM RUPESHKUMAR", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP146", name: "DEDAKIYA JAYMIN NAYANBHAI", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP147", name: "DESAI ANKESHKUMAR MERAJBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP148", name: "DESAI ISHAN NARANBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP149", name: "DESAI PRAKASHBHAI RANABHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP150", name: "DHOBI HARSH SACHINKUMAR", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP151", name: "DHOKIYA SHLOKKUMAR ARAVINDBHAI", class: "CO11", total: "2 / 7" },
+  { enrollmentNumber: "COMP152", name: "DHRUVESH PATEL", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP153", name: "DIVYESH MITESH CHHATBAR", class: "CO11", total: "4 / 7" },
+  { enrollmentNumber: "COMP154", name: "DIWAN AKSHAY AMIT", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP155", name: "DIWAN REHAN AHMED MO. JAVED", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP156", name: "DOMADIYA MEET SHAILESHBHAI", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP157", name: "DOMADIYA MOHIT RATILAL", class: "CO11", total: "2 / 7" },
+  { enrollmentNumber: "COMP158", name: "DONGA YUG VIPULBHAI", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP160", name: "GADHAVI TWISHA VIJAYDAN", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP162", name: "GAJJAR RUDRA MAULIK", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP163", name: "GAUTAM SHUBHAM SATYAPRAKASH", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP164", name: "GORE SAKSHI VILAS", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP165", name: "GORECHA SHUBHAM HIRENKUMAR", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP167", name: "GOTHI KULDEEPKUMAR DHARMENDRA", class: "CO11", total: "2 / 7" },
+  { enrollmentNumber: "COMP168", name: "GUPTA VANSHIK PARESHKUMAR", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP169", name: "GURJAR PARTHKUMAR DEVRAMBHAI", class: "CO11", total: "7 / 7" },
+  { enrollmentNumber: "COMP171", name: "HENIL PARIKH", class: "CO11", total: "2 / 7" },
+  { enrollmentNumber: "COMP172", name: "JADAV VAIDIK VIJAYBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP173", name: "JAIN DARSHIL JITENDRA", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP174", name: "JAIN LOVE MANISHBHAI", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP175", name: "JAISVAR ABHISHEK RAMBALI", class: "CO11", total: "0 / 7" },
+  { enrollmentNumber: "COMP176", name: "JANDIYA VAIBHAV ISHWARBHAI", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP177", name: "JANI YASHVI VIPULBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP178", name: "JAWALE DHAKESH YOGESH", class: "CO11", total: "1 / 7" },
+  { enrollmentNumber: "COMP179", name: "JAYSWAL DAKSH DIPAKKUMAR", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP180", name: "BHALIYA BHAIRAVI KIRITBHAI", class: "CO11", total: "0 / 7" },
+  { enrollmentNumber: "COMP181", name: "BHAVSAR KARTIK MITESHKUMAR", class: "CO11", total: "4 / 7" },
+  { enrollmentNumber: "COMP182", name: "BHAVYA CHANDRAKANT PRAJAPATI", class: "CO11", total: "3 / 7" },
+  { enrollmentNumber: "COMP183", name: "CHAUDHARI BHAVY DINESHBHAI", class: "CO11", total: "0 / 7" },
+  { enrollmentNumber: "COMP184", name: "CHAUHAN DIXITA DILIPBHAI", class: "CO11", total: "5 / 7" },
+  { enrollmentNumber: "COMP185", name: "CHAUHAN VIVEK", class: "CO11", total: "0 / 7" },
+  { enrollmentNumber: "COMP186", name: "CHHATBAR HET ALPESH", class: "CO11", total: "0 / 7" },
+  { enrollmentNumber: "COMP187", name: "CHITRODA JAY SANJAYBHAI", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP188", name: "DARJI ARYAN SANJAYBHAI", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP189", name: "DESAI ARYAN KALPESHBHAI", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP191", name: "DODIYA ADITI BHUPENDRABHAI", class: "CO11", total: "4 / 7" },
+  { enrollmentNumber: "COMP192", name: "GAJJAR BHAVYAKUMAR VIPULKUMAR", class: "CO11", total: "6 / 7" },
+  { enrollmentNumber: "COMP193", name: "GANDHARVA KARINA JITESHKUMAR", class: "CO11", total: "2 / 7" },
+  { enrollmentNumber: "COMP194", name: "HEMAL NAGAR", class: "CO11", total: "0 / 7" },
+  { enrollmentNumber: "COMP195", name: "KANHA SENJALIYA", class: "CO11", total: "6 / 7" }
 ];
 
-/* start with empty recentAttendance */
+/* ---------- Attendance store (subject-wise) ---------- */
+/* attendanceRecords[enr] = { subjects: { CPF: {status:'present', timestamp:'10:05'}, ... } } */
+const attendanceRecords = {};
+
+/* UI state */
 let recentAttendance = [];
 
-/* ---------- DOM refs ---------- */
-const recentList = document.getElementById('recentList');
-const masterList = document.getElementById('masterList');
+/* DOM refs */
+const subjectSelect = document.getElementById('subjectSelect');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const foundArea = document.getElementById('foundArea');
-const downloadBtn = document.getElementById('downloadBtn');
+const recentList = document.getElementById('recentList');
+const masterList = document.getElementById('masterList');
+const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 const finalizeBtn = document.getElementById('finalizeBtn');
 const deanEmailInput = document.getElementById('deanEmail');
+const printArea = document.getElementById('printArea');
 
-deanEmailInput.value = "aryan545@icloud.com";
+deanEmailInput.value = 'aryan545@icloud.com';
+
+/* ---------- Helpers ---------- */
+function initials(name){ return (name||'').split(' ').map(s=>s[0]||'').slice(0,2).join('').toUpperCase(); }
+function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showToast(msg){ const t = document.createElement('div'); t.className='toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(()=> t.style.opacity='0',1400); setTimeout(()=> t.remove(),2000); }
+function capitalize(s){ if(!s) return ''; return s[0].toUpperCase()+s.slice(1); }
+
+/* ---------- Initialize subject dropdown ---------- */
+function initSubjects(){
+  SUBJECTS.forEach((s, idx)=>{
+    const opt = document.createElement('option'); opt.value = s; opt.textContent = s;
+    if(idx===0) opt.selected = true;
+    subjectSelect.appendChild(opt);
+  });
+  subjectSelect.addEventListener('change', ()=> {
+    // re-render found area so it shows the new subject status
+    const currentEnroll = (searchInput.value||'').trim();
+    if(currentEnroll){
+      const student = findStudent(currentEnroll);
+      if(student) showFound(student);
+    }
+    renderMasterList();
+  });
+}
+initSubjects();
+
+/* ---------- Search logic (better matching) ---------- */
+function findStudent(q){
+  if(!q) return null;
+  q = q.trim();
+  // exact enrollment match first
+  const exactEnroll = realStudents.find(s => s.enrollmentNumber.toLowerCase() === q.toLowerCase());
+  if(exactEnroll) return exactEnroll;
+  // exact full name
+  const exactName = realStudents.find(s => s.name.toLowerCase() === q.toLowerCase());
+  if(exactName) return exactName;
+  // partial match
+  const low = q.toLowerCase();
+  return realStudents.find(s => s.enrollmentNumber.toLowerCase().includes(low) || s.name.toLowerCase().includes(low)) || null;
+}
 
 /* ---------- Renderers ---------- */
 function renderRecent(){
   recentList.innerHTML = '';
-  if(recentAttendance.length === 0){
-    recentList.innerHTML = `<div class="muted">No attendance marked yet.</div>`;
-    return;
-  }
-  recentAttendance.forEach((rec)=>{
+  if(recentAttendance.length === 0){ recentList.innerHTML = '<div class="muted">No attendance marked yet.</div>'; return; }
+  recentAttendance.forEach(rec=>{
     const row = document.createElement('div'); row.className='rec-row';
     const left = document.createElement('div'); left.className='left';
-    const avatar = document.createElement('div'); avatar.className='avatar'; avatar.textContent = initials(rec.studentName);
+    const av = document.createElement('div'); av.className='avatar'; av.textContent = initials(rec.studentName);
     const info = document.createElement('div'); info.style.minWidth='0';
-    const name = document.createElement('div'); name.className='student-name'; name.textContent = rec.studentName;
-    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `${rec.enrollmentNumber} • ${rec.timestamp || ''}`;
-    info.appendChild(name); info.appendChild(meta);
-    left.appendChild(avatar); left.appendChild(info);
+    const nm = document.createElement('div'); nm.className = 'student-name'; nm.textContent = rec.studentName;
+    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `${rec.enrollmentNumber} • ${rec.subject} • ${rec.timestamp || ''}`;
+    info.appendChild(nm); info.appendChild(meta); left.appendChild(av); left.appendChild(info);
 
     const right = document.createElement('div'); right.style.display='flex'; right.style.alignItems='center'; right.style.gap='8px';
-    const badge = document.createElement('div'); badge.className = 'badge ' + (rec.status || '').toLowerCase();
-    badge.textContent = rec.status ? capitalize(rec.status) : 'Not marked';
+    const badge = document.createElement('div'); badge.className='badge ' + (rec.status || '').toLowerCase(); badge.textContent = capitalize(rec.status || 'Not marked');
 
-    // Edit button
-    const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.className='btn-ghost';
-    editBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openEditPopup(rec.enrollmentNumber, editBtn); });
+    const editBtn = document.createElement('button'); editBtn.className='btn-ghost'; editBtn.textContent='Edit';
+    // pass subject so popup edits appropriate subject
+    editBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openEditPopup(rec.enrollmentNumber, editBtn, rec.subject); });
 
     right.appendChild(badge); right.appendChild(editBtn);
-
     row.appendChild(left); row.appendChild(right);
     recentList.appendChild(row);
   });
@@ -230,135 +296,182 @@ function renderRecent(){
 function renderMasterList(){
   masterList.innerHTML = '';
   realStudents.forEach(s=>{
-    const div = document.createElement('div'); div.className='master-item'; div.id = `master-${s.enrollmentNumber}`;
-    const left = document.createElement('div'); left.style.display='flex'; left.style.gap='8px'; left.style.alignItems='center';
-    const av = document.createElement('div'); av.style.width='36px'; av.style.height='36px'; av.style.borderRadius='8px'; av.style.display='flex'; av.style.alignItems='center'; av.style.justifyContent='center'; av.style.fontWeight='700'; av.style.color='var(--primary)'; av.textContent = initials(s.name); av.style.background='linear-gradient(180deg, rgba(107,156,255,0.04), transparent)';
-    const txt = document.createElement('div'); txt.style.minWidth='0'; txt.innerHTML = `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div><div class="meta" style="margin-top:4px">${s.enrollmentNumber}</div>`;
-    left.appendChild(av); left.appendChild(txt);
+    const item = document.createElement('div'); item.className='master-item'; item.id = `master-${s.enrollmentNumber}`;
+    const left = document.createElement('div'); left.className='master-left';
+    const av = document.createElement('div'); av.className='avatar'; av.textContent = initials(s.name);
+    av.style.width='40px'; av.style.height='40px'; av.style.borderRadius='8px';
+    const info = document.createElement('div'); info.style.minWidth='0';
+    info.innerHTML = `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div><div class="meta" style="margin-top:6px">${s.enrollmentNumber}</div>`;
+    left.appendChild(av); left.appendChild(info);
 
-    const status = document.createElement('div'); status.className = 'master-status'; status.id = `status-${s.enrollmentNumber}`; status.textContent = getStudentStatus(s.enrollmentNumber);
+    const right = document.createElement('div'); right.style.display='flex'; right.style.flexDirection='column'; right.style.alignItems='flex-end';
+    // compute present count across subjects
+    const rec = attendanceRecords[s.enrollmentNumber] || { subjects: {} };
+    let presentCount = 0;
+    SUBJECTS.forEach(sub=>{ if(rec.subjects && rec.subjects[sub] && rec.subjects[sub].status === 'present') presentCount++; });
+    const pct = Math.round((presentCount / SUBJECTS.length) * 100);
+    const status = document.createElement('div'); status.className='master-status'; status.textContent = `${s.total || '—'} • subj:${presentCount}/${SUBJECTS.length}`;
+    const prog = document.createElement('div'); prog.className='progress'; const inner = document.createElement('i'); inner.style.width = pct + '%'; prog.appendChild(inner);
 
-    div.appendChild(left); div.appendChild(status);
-    div.addEventListener('click', ()=>{ searchInput.value = s.enrollmentNumber; showFound(s); });
-    masterList.appendChild(div);
+    right.appendChild(status); right.appendChild(prog);
+
+    item.appendChild(left); item.appendChild(right);
+    item.addEventListener('click', ()=>{ searchInput.value = s.enrollmentNumber; const st = findStudent(s.enrollmentNumber); if(st) showFound(st); });
+    masterList.appendChild(item);
   });
 }
 
-/* ---------- Search + Found ---------- */
-function findStudent(q){
-  if(!q) return null;
-  q = q.toLowerCase().trim();
-  return realStudents.find(s => s.enrollmentNumber.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) || null;
-}
-
+/* ---------- Found card (shows subject pills & mark buttons) ---------- */
 function showFound(student){
-  foundArea.innerHTML = '';
+  if(!student){ foundArea.innerHTML = '<div class="muted">Student not found.</div>'; return; }
   clearMasterHighlights();
-  if(!student){
-    foundArea.innerHTML = `<div class="muted small">No student found. Try different text.</div>`;
-    return;
-  }
   const masterEl = document.getElementById(`master-${student.enrollmentNumber}`);
-  if(masterEl){ masterEl.classList.add('master-highlight'); masterEl.scrollIntoView({behavior:'smooth', block:'center'}); }
+  if(masterEl) { masterEl.classList.add('master-highlight'); setTimeout(()=> masterEl.classList.remove('master-highlight'), 700); masterEl.scrollIntoView({behavior:'smooth', block:'center'}); }
 
-  const card = document.createElement('div'); card.className='found-card';
-  card.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;gap:12px;align-items:center">
-        <div class="avatar" style="width:64px;height:64px;border-radius:10px">${initials(student.name)}</div>
-        <div>
-          <div style="font-weight:800">${student.name}</div>
-          <div class="meta">${student.enrollmentNumber} • Class ${student.class}</div>
+  const subject = subjectSelect.value || SUBJECTS[0];
+  const rec = attendanceRecords[student.enrollmentNumber] || { subjects: {} };
+  const current = rec.subjects[subject] || null;
+
+  // build pills (clickable)
+  const pillsHtml = SUBJECTS.map(s => {
+    const cls = s === subject ? 'sub-pill active' : 'sub-pill';
+    const status = rec.subjects[s] ? ` (${rec.subjects[s].status})` : '';
+    return `<span class="${cls}" data-sub="${s}">${escapeHtml(s)}</span>`;
+  }).join('');
+
+  foundArea.innerHTML = `
+    <div class="found-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="avatar" style="width:72px;height:72px;border-radius:10px">${initials(student.name)}</div>
+          <div>
+            <div style="font-weight:900;font-size:15px">${escapeHtml(student.name)}</div>
+            <div class="meta">${escapeHtml(student.enrollmentNumber)} • Class ${escapeHtml(student.class)}</div>
+            <div class="hint">Subject: <strong id="found-subject">${escapeHtml(subject)}</strong> — Current: <strong id="found-status">${current ? current.status : 'Not marked'}</strong></div>
+            <div class="subject-pills" id="subjectPills">${pillsHtml}</div>
+          </div>
+        </div>
+
+        <div style="text-align:right">
+          <div class="muted">Quick actions</div>
+          <div style="margin-top:8px;color:var(--muted);font-size:13px">Auto-advance enabled</div>
         </div>
       </div>
-      <div id="statusBadge" class="badge">${getStudentStatus(student.enrollmentNumber)}</div>
-    </div>
-    <div class="found-actions">
-      <button class="btn-ok" data-action="present">✅ Present</button>
-      <button class="btn-warn" data-action="late">⏰ Late</button>
-      <button class="btn-bad" data-action="absent">❌ Absent</button>
-      <button class="btn-ghost" data-action="clear">↩️ Clear</button>
-      <button class="btn-primary" id="nextBtn">Next ➜</button>
-      <button class="btn-ghost" id="undoBtn">⤺ Undo</button>
+
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-ok" data-action="present">✅ Present</button>
+        <button class="btn-warn" data-action="late">⏰ Late</button>
+        <button class="btn-bad" data-action="absent">❌ Absent</button>
+        <button class="btn-ghost" data-action="clear">↩️ Clear</button>
+        <button class="btn-primary" id="nextBtn">Next ➜</button>
+        <button class="btn-ghost" id="undoBtn">⤺ Undo</button>
+      </div>
     </div>
   `;
-  foundArea.appendChild(card);
 
-  card.querySelectorAll('button[data-action]').forEach(btn=>{
-    btn.addEventListener('click', ()=> {
-      const action = btn.getAttribute('data-action');
-      if(action === 'clear'){ clearMark(student); return; }
-      markAttendance(student, action);
+  // make pills clickable to switch subject
+  document.querySelectorAll('#subjectPills .sub-pill').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const newSub = el.getAttribute('data-sub');
+      subjectSelect.value = newSub;
+      // re-render found card for the same student (will show updated active pill)
+      showFound(student);
+      // focus actions
+      document.getElementById('found-status')?.scrollIntoView?.();
     });
   });
 
-  // Next button: moves to next unmarked student
-  card.querySelector('#nextBtn').addEventListener('click', ()=> autoAdvanceToNext(student.enrollmentNumber));
+  // action buttons
+  foundArea.querySelectorAll('button[data-action]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const action = btn.getAttribute('data-action');
+      const subj = subjectSelect.value || SUBJECTS[0];
+      if(action === 'clear'){ clearSubjectMark(student, subj); return; }
+      markAttendanceForSubject(student, subj, action);
+    });
+  });
 
-  // Undo: clear mark for this student
-  card.querySelector('#undoBtn').addEventListener('click', ()=> { clearMark(student); showToast('Cleared mark (undo)'); });
+  // next & undo
+  document.getElementById('nextBtn').addEventListener('click', ()=> autoAdvanceToNext(student.enrollmentNumber));
+  document.getElementById('undoBtn').addEventListener('click', ()=> { const subj = subjectSelect.value || SUBJECTS[0]; clearSubjectMark(student, subj); showToast('Cleared mark (undo)'); });
 
-  // focus search input for quick typing
-  searchInput.focus();
 }
 
-/* ---------- Status helpers ---------- */
-function getStudentStatus(enr){
-  const found = recentAttendance.find(r=>r.enrollmentNumber === enr);
-  return found ? (found.status || 'Not marked') : 'Not marked';
-}
+/* ---------- Subject marking & clearing ---------- */
+function ensureRecord(enr){ if(!attendanceRecords[enr]) attendanceRecords[enr] = { subjects: {} }; return attendanceRecords[enr]; }
 
-function updateMasterStatus(enr){
-  const el = document.getElementById(`status-${enr}`);
-  if(el) el.textContent = getStudentStatus(enr);
-  const masterEl = document.getElementById(`master-${enr}`);
-  if(masterEl){
-    masterEl.classList.add('master-highlight');
-    setTimeout(()=> masterEl.classList.remove('master-highlight'), 700);
-  }
-}
-
-/* ---------- Marking & Auto-advance ---------- */
-function markAttendance(student, status){
+function markAttendanceForSubject(student, subject, status){
   const now = new Date();
   const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  const existing = recentAttendance.find(r=>r.enrollmentNumber === student.enrollmentNumber);
-  if(existing){
-    existing.status = status;
-    existing.timestamp = status === 'absent' ? 'Not marked' : timeStr;
-  } else {
-    recentAttendance.unshift({
-      id: String(Date.now()),
-      studentName: student.name,
-      enrollmentNumber: student.enrollmentNumber,
-      class: student.class,
-      status,
-      timestamp: status === 'absent' ? 'Not marked' : timeStr
-    });
-    recentAttendance = recentAttendance.slice(0,500);
-  }
+  const rec = ensureRecord(student.enrollmentNumber);
+  rec.subjects[subject] = { status, timestamp: status === 'absent' ? 'Not marked' : timeStr };
 
-  renderRecent();
-  const badge = document.getElementById('statusBadge');
-  if(badge){ badge.textContent = capitalize(status); badge.className = 'badge ' + status; }
-  updateMasterStatus(student.enrollmentNumber);
-  showToast(`Marked ${student.name} as ${status}`);
+  // update recent list (store subject)
+  recentAttendance.unshift({ id: Date.now().toString(), studentName: student.name, enrollmentNumber: student.enrollmentNumber, class: student.class, status, subject, timestamp: rec.subjects[subject].timestamp });
+  // keep size reasonable
+  recentAttendance = recentAttendance.slice(0, 500);
 
-  // Auto-advance
+  renderRecent(); renderMasterList();
+  showToast(`Marked ${student.name} — ${subject}: ${status}`);
+  // auto-advance to next UNMARKED for this subject
   autoAdvanceToNext(student.enrollmentNumber);
 }
 
-function clearMark(student){
-  recentAttendance = recentAttendance.filter(r => r.enrollmentNumber !== student.enrollmentNumber);
-  renderRecent();
-  const badge = document.getElementById('statusBadge');
-  if(badge){ badge.textContent = 'Not marked'; badge.className = 'badge'; }
-  updateMasterStatus(student.enrollmentNumber);
+function clearSubjectMark(student, subject){
+  const rec = attendanceRecords[student.enrollmentNumber];
+  if(rec && rec.subjects && rec.subjects[subject]){ delete rec.subjects[subject]; }
+  // remove recent entries for that student+subject
+  recentAttendance = recentAttendance.filter(r => !(r.enrollmentNumber === student.enrollmentNumber && r.subject === subject));
+  renderRecent(); renderMasterList();
 }
 
-/* Auto-advance: find next unmarked student (strict) */
+/* ---------- Edit popup (used when editing recent entries) ---------- */
+let activePopup = null;
+function openEditPopup(enrollmentNumber, anchorEl, subjectDefault){
+  closeEditPopup();
+  const rect = anchorEl.getBoundingClientRect();
+  const popup = document.createElement('div'); popup.className='edit-pop';
+  popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+  popup.style.left = (rect.left + window.scrollX) + 'px';
+  // build subject select inside popup so user can edit the same subject or pick another
+  const subjOptions = SUBJECTS.map(s => `<option value="${s}" ${s===subjectDefault?'selected':''}>${s}</option>`).join('');
+  popup.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="popupSubject">${subjOptions}</select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ok" data-action="present">Present</button>
+        <button class="btn-warn" data-action="late">Late</button>
+        <button class="btn-bad" data-action="absent">Absent</button>
+        <button class="btn-ghost" data-action="clear">Clear</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(popup);
+  activePopup = popup;
+  popup.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const a = b.getAttribute('data-action');
+      const subj = popup.querySelector('#popupSubject').value || SUBJECTS[0];
+      const student = realStudents.find(s => s.enrollmentNumber === enrollmentNumber);
+      if(!student) return;
+      if(a === 'clear') clearSubjectMark(student, subj);
+      else markAttendanceForSubject(student, subj, a);
+      closeEditPopup();
+    });
+  });
+  setTimeout(()=> window.addEventListener('click', popupOutsideClick));
+}
+function popupOutsideClick(e){ if(activePopup && !activePopup.contains(e.target)) closeEditPopup(); }
+function closeEditPopup(){ if(activePopup){ activePopup.remove(); activePopup = null; window.removeEventListener('click', popupOutsideClick); } }
+
+/* ---------- Auto-advance: next UNMARKED for selected subject ---------- */
 function autoAdvanceToNext(currentEnrollment){
-  const markedSet = new Set(recentAttendance.map(r=>r.enrollmentNumber));
+  const subject = subjectSelect.value || SUBJECTS[0];
+  const markedSet = new Set(Object.entries(attendanceRecords)
+    .filter(([enr, rec]) => rec && rec.subjects && rec.subjects[subject])
+    .map(([enr]) => enr));
   const idx = realStudents.findIndex(s => s.enrollmentNumber === currentEnrollment);
   for(let i = idx + 1; i < realStudents.length; i++){
     if(!markedSet.has(realStudents[i].enrollmentNumber)){
@@ -375,149 +488,143 @@ function autoAdvanceToNext(currentEnrollment){
     }
   }
   searchInput.value = '';
-  foundArea.innerHTML = `<div class="done">All students processed. Download CSV or finalize email.</div>`;
+  foundArea.innerHTML = `<div class="muted">All students processed for subject ${subject}.</div>`;
 }
 
-/* ---------- Edit popup ---------- */
-let activePopup = null;
-function openEditPopup(enrollmentNumber, anchorEl){
-  closeEditPopup();
-  const rect = anchorEl.getBoundingClientRect();
-  const popup = document.createElement('div'); popup.className='edit-pop';
-  popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
-  popup.style.left = (rect.left + window.scrollX) + 'px';
-  popup.innerHTML = `
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn-ok" data-action="present">Present</button>
-      <button class="btn-warn" data-action="late">Late</button>
-      <button class="btn-bad" data-action="absent">Absent</button>
-      <button class="btn-ghost" data-action="clear">Clear</button>
-    </div>
-  `;
-  document.body.appendChild(popup);
-  activePopup = popup;
-  popup.querySelectorAll('button').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const a = b.getAttribute('data-action');
-      const student = realStudents.find(s=>s.enrollmentNumber === enrollmentNumber);
-      if(!student) return;
-      if(a === 'clear') clearMark(student);
-      else markAttendance(student, a);
-      closeEditPopup();
-    });
-  });
-  setTimeout(()=> window.addEventListener('click', popupOutsideClick));
-}
-function popupOutsideClick(e){ if(activePopup && !activePopup.contains(e.target)) closeEditPopup(); }
-function closeEditPopup(){ if(activePopup){ activePopup.remove(); activePopup = null; window.removeEventListener('click', popupOutsideClick); } }
-
-/* ---------- CSV & Mail ---------- */
-function buildAttendanceSnapshot(){
-  const map = new Map(recentAttendance.map(r => [r.enrollmentNumber, r]));
+/* ---------- Printable / PDF export (subject columns) ---------- */
+function buildPrintableHTML(){
   const rows = realStudents.map(s=>{
-    const r = map.get(s.enrollmentNumber);
-    return {
-      enrollmentNumber: s.enrollmentNumber,
-      name: s.name,
-      class: s.class,
-      status: r ? (r.status || 'Not marked') : 'Not marked',
-      timestamp: r ? r.timestamp : ''
-    };
+    const rec = attendanceRecords[s.enrollmentNumber] || { subjects: {} };
+    const subjStatuses = SUBJECTS.map(sub => rec.subjects[sub] ? rec.subjects[sub].status : '—');
+    return { enrollmentNumber: s.enrollmentNumber, name: s.name, total: s.total || '', subjStatuses };
   });
-  return rows;
+
+  let html = '';
+  html += `<h2>R.C Technical Institute — CO11 Attendance (Subject-wise)</h2>`;
+  html += `<p>Generated: ${new Date().toLocaleString()}</p>`;
+  html += `<table>`;
+  html += `<thead><tr><th>Enrollment</th><th>Student Name</th><th>Total</th>`;
+  SUBJECTS.forEach(s=> html += `<th>${escapeHtml(s)}</th>`);
+  html += `</tr></thead><tbody>`;
+  rows.forEach(r=>{
+    html += `<tr>`;
+    html += `<td>${escapeHtml(r.enrollmentNumber)}</td>`;
+    html += `<td>${escapeHtml(r.name)}</td>`;
+    html += `<td>${escapeHtml(r.total)}</td>`;
+    r.subjStatuses.forEach(st => html += `<td>${escapeHtml(st)}</td>`);
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+async function downloadPDF(filename = 'attendance_co11_subjectwise.pdf'){
+  printArea.innerHTML = buildPrintableHTML();
+  printArea.style.color = '#111'; printArea.style.background = '#fff';
+  await new Promise(r=>setTimeout(r, 80));
+  const canvas = await html2canvas(printArea, { scale: 2 });
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const img = new Image(); img.src = imgData; await new Promise(res => img.onload = res);
+  const ratio = Math.min(pageWidth / img.width, pageHeight / img.height);
+  const drawW = img.width * ratio; const drawH = img.height * ratio;
+  pdf.addImage(imgData, 'PNG', (pageWidth - drawW)/2, 20, drawW, drawH);
+  pdf.save(filename);
+  showToast('PDF downloaded');
+}
+
+/* ---------- Snapshot builder (CSV fallback) ---------- */
+function buildAttendanceSnapshot(){
+  return realStudents.map(s=>{
+    const rec = attendanceRecords[s.enrollmentNumber] || { subjects: {} };
+    const subjObj = {}; SUBJECTS.forEach(sub => subjObj[sub] = rec.subjects[sub] ? rec.subjects[sub].status : '—');
+    return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, total: s.total || '', ...subjObj };
+  });
 }
 function toCSV(rows){
-  const header = ['EnrollmentNumber','Name','Class','Status','Timestamp'];
+  const header = ['EnrollmentNumber','Name','Class','TotalPresence', ...SUBJECTS];
   const csv = [header.join(',')].concat(rows.map(r=>{
     function q(v){ if(v==null) return ''; return '"'+String(v).replace(/"/g,'""')+'"'; }
-    return [q(r.enrollmentNumber), q(r.name), q(r.class), q(r.status), q(r.timestamp)].join(',');
+    return [q(r.enrollmentNumber), q(r.name), q(r.class), q(r.total)].concat(SUBJECTS.map(s=>q(r[s]))).join(',');
   }));
   return csv.join('\n');
 }
-function downloadCSV(filename='attendance_co11.csv'){
+function downloadCSV(filename='attendance_co11_subjectwise.csv'){
   const rows = buildAttendanceSnapshot();
   const csv = toCSV(rows);
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click();
   setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 5000);
-  return csv;
+  showToast('CSV downloaded');
 }
-function summarizeCounts(){
-  const rows = buildAttendanceSnapshot();
+
+/* ---------- Mail helper ---------- */
+function summarizeCountsForSubject(subject){
   let present=0, absent=0, late=0, notMarked=0;
-  rows.forEach(r=>{
-    if(r.status === 'present') present++;
-    else if(r.status === 'absent') absent++;
-    else if(r.status === 'late') late++;
+  realStudents.forEach(s => {
+    const rec = attendanceRecords[s.enrollmentNumber];
+    const v = rec && rec.subjects && rec.subjects[subject] ? rec.subjects[subject].status : null;
+    if(v === 'present') present++;
+    else if(v === 'absent') absent++;
+    else if(v === 'late') late++;
     else notMarked++;
   });
   return {present, absent, late, notMarked};
 }
 function openMailToDean(){
-  const dean = deanEmailInput.value.trim() || 'aryan545@icloud.com';
-  const counts = summarizeCounts();
-  const subject = encodeURIComponent('Final Attendance — CO11 (R.C Technical Institute)');
+  const dean = (deanEmailInput.value || '').trim() || 'aryan545@icloud.com';
+  const subject = subjectSelect.value || SUBJECTS[0];
+  const counts = summarizeCountsForSubject(subject);
+  const subjectLine = encodeURIComponent(`Final Attendance — CO11 — ${subject} (R.C Technical Institute)`);
   const bodyLines = [
     `Dear Dean,`,
     ``,
-    `Please find the final attendance summary for class CO11 below:`,
+    `Attendance summary for class CO11 — subject: ${subject}:`,
     `Present: ${counts.present}`,
     `Late: ${counts.late}`,
     `Absent: ${counts.absent}`,
     `Not marked: ${counts.notMarked}`,
     ``,
-    `I have downloaded the full CSV (attached file) — please attach it to this mail before sending if your client needs a separate attachment.`,
+    `I have generated the full attendance PDF — please attach it if you need a separate file.`,
     ``,
     `Regards,`,
     `Instructor`
   ];
   const body = encodeURIComponent(bodyLines.join('\n'));
-  window.location.href = `mailto:${encodeURIComponent(dean)}?subject=${subject}&body=${body}`;
+  window.location.href = `mailto:${encodeURIComponent(dean)}?subject=${subjectLine}&body=${body}`;
 }
 
-/* ---------- Utils ---------- */
-function initials(name){ return name.split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase(); }
-function capitalize(s){ if(!s) return ''; return s[0].toUpperCase()+s.slice(1); }
-function showToast(msg){ const t = document.createElement('div'); t.className='toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(()=> t.style.opacity='0',1600); setTimeout(()=> t.remove(),2100); }
-function clearMasterHighlights(){ document.querySelectorAll('.master-highlight').forEach(el=>el.classList.remove('master-highlight')); }
+/* ---------- Events & Init ---------- */
+renderMasterList(); renderRecent();
 
-/* ---------- Init & Events ---------- */
-renderMasterList();
-renderRecent();
-
-document.getElementById('searchBtn').addEventListener('click', ()=>{
-  const q = searchInput.value.trim();
-  if(!q) return showToast('Type enrollment number or name');
-  const s = findStudent(q);
-  if(!s) { showToast('Student not found'); return; }
-  showFound(s);
+searchBtn.addEventListener('click', ()=>{
+  const q = (searchInput.value||'').trim();
+  if(!q){ showToast('Type enrollment number or name'); return; }
+  const st = findStudent(q);
+  if(!st){ showToast('Student not found'); return; }
+  showFound(st);
 });
-searchInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ document.getElementById('searchBtn').click(); } });
+searchInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ searchBtn.click(); } });
 
-downloadBtn.addEventListener('click', ()=>{ downloadCSV(); showToast('CSV downloaded'); });
-finalizeBtn.addEventListener('click', ()=>{ downloadCSV(); showToast('CSV downloaded — opening mail client'); openMailToDean(); });
+downloadPdfBtn.addEventListener('click', ()=> downloadPDF());
+finalizeBtn.addEventListener('click', async ()=>{
+  await downloadPDF();
+  showToast('PDF generated — opening mail client');
+  openMailToDean();
+});
 
-document.getElementById('masterContainer').addEventListener('scroll', closeEditPopup);
+// convenience: Ctrl+Shift+C to download CSV
+document.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.shiftKey && e.key.toLowerCase()==='c'){ downloadCSV(); } });
+
+document.getElementById('masterContainer').addEventListener('scroll', ()=>{ closeEditPopup(); });
 window.addEventListener('resize', closeEditPopup);
 
-/* ---------- Background animated symbols ---------- */
-const symbols = ['C', 'C++', 'Python', 'int', '{ }', ';', '<>', '()'];
-const bg = document.getElementById('bgAnim');
-for(let i=0;i<24;i++){
-  const el = document.createElement('div'); el.className='sym';
-  el.style.left = (Math.random()*100)+'%';
-  el.style.fontSize = (12 + Math.random()*48) + 'px';
-  el.style.opacity = (0.05 + Math.random()*0.12);
-  el.style.transform = `translateY(${80 + Math.random()*40}vh)`;
-  el.style.animation = `floatUp ${12 + Math.random()*18}s linear ${Math.random()*-6}s infinite`;
-  el.textContent = symbols[Math.floor(Math.random()*symbols.length)];
-  bg.appendChild(el);
-}
+function clearMasterHighlights(){ document.querySelectorAll('.master-highlight').forEach(el=>el.classList.remove('master-highlight')); }
 
-/* ensure empty start */
-recentAttendance = []; renderRecent();
 </script>
 </body>
 </html>
