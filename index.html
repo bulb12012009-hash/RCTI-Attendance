@@ -207,13 +207,10 @@ const realStudents = [
 ];
 
 /* ---------- Attendance store (subject-wise) ---------- */
-/* attendanceRecords[enr] = { subjects: { CPF: {status:'present', timestamp:'10:05'}, ... } } */
 const attendanceRecords = {};
-
-/* UI state */
 let recentAttendance = [];
 
-/* DOM refs */
+/* ---------- DOM refs ---------- */
 const subjectSelect = document.getElementById('subjectSelect');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
@@ -241,31 +238,15 @@ function initSubjects(){
     subjectSelect.appendChild(opt);
   });
   subjectSelect.addEventListener('change', ()=> {
-    // re-render found area so it shows the new subject status
     const currentEnroll = (searchInput.value||'').trim();
-    if(currentEnroll){
-      const student = findStudent(currentEnroll);
-      if(student) showFound(student);
-    }
+    if(currentEnroll){ const student = findStudent(currentEnroll); if(student) showFound(student); }
     renderMasterList();
   });
 }
 initSubjects();
 
 /* ---------- Search logic (better matching) ---------- */
-function findStudent(q){
-  if(!q) return null;
-  q = q.trim();
-  // exact enrollment match first
-  const exactEnroll = realStudents.find(s => s.enrollmentNumber.toLowerCase() === q.toLowerCase());
-  if(exactEnroll) return exactEnroll;
-  // exact full name
-  const exactName = realStudents.find(s => s.name.toLowerCase() === q.toLowerCase());
-  if(exactName) return exactName;
-  // partial match
-  const low = q.toLowerCase();
-  return realStudents.find(s => s.enrollmentNumber.toLowerCase().includes(low) || s.name.toLowerCase().includes(low)) || null;
-}
+function findStudent(q){ if(!q) return null; q = q.trim(); const exactEnroll = realStudents.find(s => s.enrollmentNumber.toLowerCase() === q.toLowerCase()); if(exactEnroll) return exactEnroll; const exactName = realStudents.find(s => s.name.toLowerCase() === q.toLowerCase()); if(exactName) return exactName; const low = q.toLowerCase(); return realStudents.find(s => s.enrollmentNumber.toLowerCase().includes(low) || s.name.toLowerCase().includes(low)) || null; }
 
 /* ---------- Renderers ---------- */
 function renderRecent(){
@@ -284,7 +265,6 @@ function renderRecent(){
     const badge = document.createElement('div'); badge.className='badge ' + (rec.status || '').toLowerCase(); badge.textContent = capitalize(rec.status || 'Not marked');
 
     const editBtn = document.createElement('button'); editBtn.className='btn-ghost'; editBtn.textContent='Edit';
-    // pass subject so popup edits appropriate subject
     editBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openEditPopup(rec.enrollmentNumber, editBtn, rec.subject); });
 
     right.appendChild(badge); right.appendChild(editBtn);
@@ -305,7 +285,6 @@ function renderMasterList(){
     left.appendChild(av); left.appendChild(info);
 
     const right = document.createElement('div'); right.style.display='flex'; right.style.flexDirection='column'; right.style.alignItems='flex-end';
-    // compute present count across subjects
     const rec = attendanceRecords[s.enrollmentNumber] || { subjects: {} };
     let presentCount = 0;
     SUBJECTS.forEach(sub=>{ if(rec.subjects && rec.subjects[sub] && rec.subjects[sub].status === 'present') presentCount++; });
@@ -321,7 +300,7 @@ function renderMasterList(){
   });
 }
 
-/* ---------- Found card (shows subject pills & mark buttons) ---------- */
+/* ---------- Found card ---------- */
 function showFound(student){
   if(!student){ foundArea.innerHTML = '<div class="muted">Student not found.</div>'; return; }
   clearMasterHighlights();
@@ -332,10 +311,8 @@ function showFound(student){
   const rec = attendanceRecords[student.enrollmentNumber] || { subjects: {} };
   const current = rec.subjects[subject] || null;
 
-  // build pills (clickable)
   const pillsHtml = SUBJECTS.map(s => {
     const cls = s === subject ? 'sub-pill active' : 'sub-pill';
-    const status = rec.subjects[s] ? ` (${rec.subjects[s].status})` : '';
     return `<span class="${cls}" data-sub="${s}">${escapeHtml(s)}</span>`;
   }).join('');
 
@@ -369,19 +346,14 @@ function showFound(student){
     </div>
   `;
 
-  // make pills clickable to switch subject
   document.querySelectorAll('#subjectPills .sub-pill').forEach(el=>{
     el.addEventListener('click', ()=>{
       const newSub = el.getAttribute('data-sub');
       subjectSelect.value = newSub;
-      // re-render found card for the same student (will show updated active pill)
       showFound(student);
-      // focus actions
-      document.getElementById('found-status')?.scrollIntoView?.();
     });
   });
 
-  // action buttons
   foundArea.querySelectorAll('button[data-action]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const action = btn.getAttribute('data-action');
@@ -391,10 +363,8 @@ function showFound(student){
     });
   });
 
-  // next & undo
   document.getElementById('nextBtn').addEventListener('click', ()=> autoAdvanceToNext(student.enrollmentNumber));
   document.getElementById('undoBtn').addEventListener('click', ()=> { const subj = subjectSelect.value || SUBJECTS[0]; clearSubjectMark(student, subj); showToast('Cleared mark (undo)'); });
-
 }
 
 /* ---------- Subject marking & clearing ---------- */
@@ -406,26 +376,22 @@ function markAttendanceForSubject(student, subject, status){
   const rec = ensureRecord(student.enrollmentNumber);
   rec.subjects[subject] = { status, timestamp: status === 'absent' ? 'Not marked' : timeStr };
 
-  // update recent list (store subject)
   recentAttendance.unshift({ id: Date.now().toString(), studentName: student.name, enrollmentNumber: student.enrollmentNumber, class: student.class, status, subject, timestamp: rec.subjects[subject].timestamp });
-  // keep size reasonable
   recentAttendance = recentAttendance.slice(0, 500);
 
   renderRecent(); renderMasterList();
   showToast(`Marked ${student.name} — ${subject}: ${status}`);
-  // auto-advance to next UNMARKED for this subject
   autoAdvanceToNext(student.enrollmentNumber);
 }
 
 function clearSubjectMark(student, subject){
   const rec = attendanceRecords[student.enrollmentNumber];
   if(rec && rec.subjects && rec.subjects[subject]){ delete rec.subjects[subject]; }
-  // remove recent entries for that student+subject
   recentAttendance = recentAttendance.filter(r => !(r.enrollmentNumber === student.enrollmentNumber && r.subject === subject));
   renderRecent(); renderMasterList();
 }
 
-/* ---------- Edit popup (used when editing recent entries) ---------- */
+/* ---------- Edit popup ---------- */
 let activePopup = null;
 function openEditPopup(enrollmentNumber, anchorEl, subjectDefault){
   closeEditPopup();
@@ -433,7 +399,6 @@ function openEditPopup(enrollmentNumber, anchorEl, subjectDefault){
   const popup = document.createElement('div'); popup.className='edit-pop';
   popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
   popup.style.left = (rect.left + window.scrollX) + 'px';
-  // build subject select inside popup so user can edit the same subject or pick another
   const subjOptions = SUBJECTS.map(s => `<option value="${s}" ${s===subjectDefault?'selected':''}>${s}</option>`).join('');
   popup.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -466,7 +431,7 @@ function openEditPopup(enrollmentNumber, anchorEl, subjectDefault){
 function popupOutsideClick(e){ if(activePopup && !activePopup.contains(e.target)) closeEditPopup(); }
 function closeEditPopup(){ if(activePopup){ activePopup.remove(); activePopup = null; window.removeEventListener('click', popupOutsideClick); } }
 
-/* ---------- Auto-advance: next UNMARKED for selected subject ---------- */
+/* ---------- Auto-advance ---------- */
 function autoAdvanceToNext(currentEnrollment){
   const subject = subjectSelect.value || SUBJECTS[0];
   const markedSet = new Set(Object.entries(attendanceRecords)
@@ -491,7 +456,7 @@ function autoAdvanceToNext(currentEnrollment){
   foundArea.innerHTML = `<div class="muted">All students processed for subject ${subject}.</div>`;
 }
 
-/* ---------- Printable / PDF export (subject columns) ---------- */
+/* ---------- Printable / PDF export (improved finalize flow) ---------- */
 function buildPrintableHTML(){
   const rows = realStudents.map(s=>{
     const rec = attendanceRecords[s.enrollmentNumber] || { subjects: {} };
@@ -518,64 +483,41 @@ function buildPrintableHTML(){
   return html;
 }
 
+/* Replacement downloadPDF: returns filename once download triggered */
 async function downloadPDF(filename = 'attendance_co11_subjectwise.pdf'){
+  // render print area HTML
   printArea.innerHTML = buildPrintableHTML();
-  printArea.style.color = '#111'; printArea.style.background = '#fff';
-  await new Promise(r=>setTimeout(r, 80));
+  printArea.style.color = '#111';
+  printArea.style.background = '#fff';
+
+  // give layout a tick to paint
+  await new Promise(r => setTimeout(r, 120));
+
+  // render to canvas
   const canvas = await html2canvas(printArea, { scale: 2 });
   const imgData = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+
+  // use UMD jsPDF instance
+  const pdf = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
+
   const img = new Image(); img.src = imgData; await new Promise(res => img.onload = res);
   const ratio = Math.min(pageWidth / img.width, pageHeight / img.height);
   const drawW = img.width * ratio; const drawH = img.height * ratio;
-  pdf.addImage(imgData, 'PNG', (pageWidth - drawW)/2, 20, drawW, drawH);
-  pdf.save(filename);
-  showToast('PDF downloaded');
-}
+  pdf.addImage(imgData, 'PNG', (pageWidth - drawW) / 2, 20, drawW, drawH);
 
-/* ---------- Snapshot builder (CSV fallback) ---------- */
-function buildAttendanceSnapshot(){
-  return realStudents.map(s=>{
-    const rec = attendanceRecords[s.enrollmentNumber] || { subjects: {} };
-    const subjObj = {}; SUBJECTS.forEach(sub => subjObj[sub] = rec.subjects[sub] ? rec.subjects[sub].status : '—');
-    return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, total: s.total || '', ...subjObj };
-  });
-}
-function toCSV(rows){
-  const header = ['EnrollmentNumber','Name','Class','TotalPresence', ...SUBJECTS];
-  const csv = [header.join(',')].concat(rows.map(r=>{
-    function q(v){ if(v==null) return ''; return '"'+String(v).replace(/"/g,'""')+'"'; }
-    return [q(r.enrollmentNumber), q(r.name), q(r.class), q(r.total)].concat(SUBJECTS.map(s=>q(r[s]))).join(',');
-  }));
-  return csv.join('\n');
-}
-function downloadCSV(filename='attendance_co11_subjectwise.csv'){
-  const rows = buildAttendanceSnapshot();
-  const csv = toCSV(rows);
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  // get blob and trigger download reliably
+  const blob = pdf.output('blob');
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click();
-  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 5000);
-  showToast('CSV downloaded');
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 2000);
+
+  return filename;
 }
 
-/* ---------- Mail helper ---------- */
-function summarizeCountsForSubject(subject){
-  let present=0, absent=0, late=0, notMarked=0;
-  realStudents.forEach(s => {
-    const rec = attendanceRecords[s.enrollmentNumber];
-    const v = rec && rec.subjects && rec.subjects[subject] ? rec.subjects[subject].status : null;
-    if(v === 'present') present++;
-    else if(v === 'absent') absent++;
-    else if(v === 'late') late++;
-    else notMarked++;
-  });
-  return {present, absent, late, notMarked};
-}
-function openMailToDean(){
+/* openMailToDean now takes filename to guide user to attach it manually */
+function openMailToDean(filename){
   const dean = (deanEmailInput.value || '').trim() || 'aryan545@icloud.com';
   const subject = subjectSelect.value || SUBJECTS[0];
   const counts = summarizeCountsForSubject(subject);
@@ -583,13 +525,15 @@ function openMailToDean(){
   const bodyLines = [
     `Dear Dean,`,
     ``,
-    `Attendance summary for class CO11 — subject: ${subject}:`,
+    `Please find the attendance summary for class CO11 — subject: ${subject}:`,
     `Present: ${counts.present}`,
     `Late: ${counts.late}`,
     `Absent: ${counts.absent}`,
     `Not marked: ${counts.notMarked}`,
     ``,
-    `I have generated the full attendance PDF — please attach it if you need a separate file.`,
+    `I have generated the full attendance PDF (file saved to your device):`,
+    `Filename suggestion: ${filename}`,
+    `Please attach this file to the message before sending (most browsers save to your Downloads folder).`,
     ``,
     `Regards,`,
     `Instructor`
@@ -598,30 +542,43 @@ function openMailToDean(){
   window.location.href = `mailto:${encodeURIComponent(dean)}?subject=${subjectLine}&body=${body}`;
 }
 
-/* ---------- Events & Init ---------- */
-renderMasterList(); renderRecent();
-
-searchBtn.addEventListener('click', ()=>{
-  const q = (searchInput.value||'').trim();
-  if(!q){ showToast('Type enrollment number or name'); return; }
-  const st = findStudent(q);
-  if(!st){ showToast('Student not found'); return; }
-  showFound(st);
+/* Finalize handler: await download then open mailto with instructions */
+finalizeBtn.addEventListener('click', async () => {
+  try {
+    const filename = await downloadPDF();
+    setTimeout(() => {
+      openMailToDean(filename);
+      showToast('PDF downloaded — mail client opened (please attach PDF if not attached automatically).');
+    }, 250);
+  } catch (err) {
+    console.error('Finalize error:', err);
+    showToast('Error generating PDF. Check console.');
+  }
 });
+
+/* ---------- Snapshot builder & CSV fallback ---------- */
+function buildAttendanceSnapshot(){
+  return realStudents.map(s=>{
+    const rec = attendanceRecords[s.enrollmentNumber] || { subjects: {} };
+    const subjObj = {}; SUBJECTS.forEach(sub => subjObj[sub] = rec.subjects[sub] ? rec.subjects[sub].status : '—');
+    return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, total: s.total || '', ...subjObj };
+  });
+}
+function toCSV(rows){ const header = ['EnrollmentNumber','Name','Class','TotalPresence', ...SUBJECTS]; const csv = [header.join(',')].concat(rows.map(r=>{ function q(v){ if(v==null) return ''; return '"'+String(v).replace(/"/g,'""')+'"'; } return [q(r.enrollmentNumber), q(r.name), q(r.class), q(r.total)].concat(SUBJECTS.map(s=>q(r[s]))).join(','); })); return csv.join('\n'); }
+function downloadCSV(filename='attendance_co11_subjectwise.csv'){ const rows = buildAttendanceSnapshot(); const csv = toCSV(rows); const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 5000); showToast('CSV downloaded'); }
+
+/* ---------- Mail helper for counts ---------- */
+function summarizeCountsForSubject(subject){ let present=0, absent=0, late=0, notMarked=0; realStudents.forEach(s => { const rec = attendanceRecords[s.enrollmentNumber]; const v = rec && rec.subjects && rec.subjects[subject] ? rec.subjects[subject].status : null; if(v === 'present') present++; else if(v === 'absent') absent++; else if(v === 'late') late++; else notMarked++; }); return {present, absent, late, notMarked}; }
+
+/* ---------- Events & init ---------- */
+renderMasterList(); renderRecent();
+searchBtn.addEventListener('click', ()=>{ const q = (searchInput.value||'').trim(); if(!q){ showToast('Type enrollment number or name'); return; } const st = findStudent(q); if(!st){ showToast('Student not found'); return; } showFound(st); });
 searchInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ searchBtn.click(); } });
 
 downloadPdfBtn.addEventListener('click', ()=> downloadPDF());
-finalizeBtn.addEventListener('click', async ()=>{
-  await downloadPDF();
-  showToast('PDF generated — opening mail client');
-  openMailToDean();
-});
-
 // convenience: Ctrl+Shift+C to download CSV
 document.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.shiftKey && e.key.toLowerCase()==='c'){ downloadCSV(); } });
-
-document.getElementById('masterContainer').addEventListener('scroll', ()=>{ closeEditPopup(); });
-window.addEventListener('resize', closeEditPopup);
+document.getElementById('masterContainer').addEventListener('scroll', ()=>{ closeEditPopup(); }); window.addEventListener('resize', closeEditPopup);
 
 function clearMasterHighlights(){ document.querySelectorAll('.master-highlight').forEach(el=>el.classList.remove('master-highlight')); }
 
