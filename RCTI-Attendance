@@ -1,153 +1,171 @@
-<!doctype html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>R.C Technical Institute — CO11 Attendance (Subject-wise — Multi-account)</title>
-<!-- html2canvas + jsPDF (CDN) -->
+<title>R.C Technical Institute — CO11 Attendance</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-:root{
---bg:#0b1220; --muted:#9fb0c8;
---accent:#6b9cff; --accent-2:#3b82f6;
---white:#eaf3ff; --green:#28a745; --amber:#ffb020; --red:#ef4444;
-font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+:root {
+  --bg: #0d1b2a;
+  --card-bg: rgba(20, 33, 61, 0.9);
+  --accent: #00ff99;
+  --accent-2: #3a86ff;
+  --text: #e0e1dd;
+  --muted: #778da9;
+  --border: rgba(0, 255, 153, 0.2);
+  --green: #06d6a0;
+  --amber: #ffd166;
+  --red: #ef476f;
+  font-family: 'Fira Code', monospace;
 }
-*{box-sizing:borderbox}
-html,body{height:100%;margin:0;background:linear-gradient(180deg,#051025 0%, #071426 60%);color:var(--white);-webkit-font-smoothing:antialiased}
-.page{max-width:1200px;margin:20px auto;padding:18px}
-header{display:flex;gap:14px;align-items:center;margin-bottom:16px}
-h1{margin:0;font-size:18px}
-.muted{color:var(--muted);font-size:13px}
+* { box-sizing: border-box; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
+.page { max-width: 1400px; margin: 40px auto; padding: 20px; }
+header { display: flex; gap: 20px; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+h1 { margin: 0; font-size: 22px; color: var(--accent); }
+.muted { color: var(--muted); font-size: 14px; }
 
-.layout{display:grid;grid-template-columns:1fr 420px;gap:18px}
-.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,0.03)}
-.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.title{font-weight:800}
+.layout { display: grid; grid-template-columns: 1fr 450px; gap: 20px; }
+.card { background: var(--card-bg); border-radius: 12px; padding: 16px; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.title { font-weight: 600; color: var(--accent); }
 
-#recentList{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:6px}
-.rec-row{display:flex;justify-content:space-between;gap:12px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.01);align-items:center}
-.left{display:flex;gap:12px;align-items:center;min-width:0}
-.avatar{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg, rgba(107,156,255,0.12), rgba(59,130,246,0.06));display:flex;align-items:center;justify-content:center;font-weight:800;color:white}
-.student-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta{color:var(--muted);font-size:13px}
-.badge{padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px;border:1px solid rgba(255,255,255,0.03)}
-.badge.present{background:rgba(40,167,69,0.08);color:var(--green)}
-.badge.absent{background:rgba(239,68,68,0.08);color:var(--red)}
-.badge.late{background:rgba(255,176,32,0.08);color:var(--amber)}
+#recentList { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 6px; scrollbar-width: thin; scrollbar-color: var(--accent) var(--bg); }
+.rec-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px; border-radius: 10px; background: rgba(0,255,153,0.05); }
+.rec-row:hover { transform: scale(1.02); }
+.left { display: flex; gap: 12px; align-items: center; }
+.avatar { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--bg); }
+.student-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { color: var(--muted); font-size: 13px; }
+.badge { padding: 6px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; border: 1px solid var(--border); }
+.badge.present { background: rgba(6,214,160,0.1); color: var(--green); }
+.badge.absent { background: rgba(239,71,111,0.1); color: var(--red); }
+.badge.late { background: rgba(255,209,102,0.1); color: var(--amber); }
 
-.controls{display:flex;gap:8px}
-button{cursor:pointer;border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-weight:800}
-.btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));border:none;color:white}
-.btn-ok{border-color:rgba(40,167,69,0.18);color:var(--green)}
-.btn-warn{border-color:rgba(255,176,32,0.18);color:var(--amber)}
-.btn-bad{border-color:rgba(239,68,68,0.18);color:var(--red)}
-.btn-ghost{border:1px dashed rgba(255,255,255,0.06)}
-input[type="text"], select{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:inherit}
+button { cursor: pointer; border-radius: 10px; padding: 8px 12px; border: 1px solid var(--border); background: transparent; color: var(--text); font-weight: 600; }
+button:hover { background: rgba(0,255,153,0.1); transform: translateY(-2px); }
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: none; color: var(--bg); }
+.btn-ok { border-color: rgba(6,214,160,0.2); color: var(--green); }
+.btn-warn { border-color: rgba(255,209,102,0.2); color: var(--amber); }
+.btn-bad { border-color: rgba(239,71,111,0.2); color: var(--red); }
+.btn-ghost { border-style: dashed; }
+input[type="text"], input[type="date"], select { padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: rgba(0,255,153,0.03); color: var(--text); }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
 
-.master-container{max-height:720px;overflow:auto;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)}
-.master-item{display:flex;justify-content:space-between;gap:8px;padding:10px;border-radius:8px;align-items:center;cursor:pointer}
-.master-item:hover{background:rgba(255,255,255,0.01)}
-.master-left{display:flex;gap:10px;align-items:center;min-width:0}
-.master-status{font-size:13px;color:var(--muted);min-width:120px;text-align:right}
-.progress{width:120px;height:8px;border-radius:999px;background:rgba(255,255,255,0.03);overflow:hidden}
-.progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));}
+.master-container { max-height: 700px; overflow-y: auto; padding: 6px; border-radius: 10px; border: 1px solid var(--border); }
+.master-item { display: flex; justify-content: space-between; gap: 10px; padding: 10px; border-radius: 10px; cursor: pointer; }
+.master-item:hover { background: rgba(0,255,153,0.05); }
+.master-left { display: flex; gap: 10px; align-items: center; }
+.master-status { font-size: 13px; color: var(--muted); min-width: 120px; text-align: right; }
 
-.found-card{padding:12px;border-radius:10px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02)}
-.subject-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.sub-pill{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.02);cursor:pointer;font-weight:700;border:1px solid rgba(255,255,255,0.03);transition:transform 0.2s ease, background 0.2s ease}
-.sub-pill:hover{transform:scale(1.05)}
-.sub-pill.active{outline:2px solid rgba(107,156,255,0.12);background:linear-gradient(90deg, rgba(107,156,255,0.06), rgba(59,130,246,0.03))}
-.sub-pill.cpf-symbol {position: relative; overflow: hidden;}
-.sub-pill.cpf-symbol::after {
-  content: '';
-  position: absolute;
-  top: -50%; left: -50%;
-  width: 200%; height: 200%;
-  background: linear-gradient(45deg, transparent, rgba(255,255,255,0.2), transparent);
-  animation: shine 1.5s ease infinite;
-  display: none;
-}
-.sub-pill.cpf-symbol:hover::after {display: block;}
-@keyframes shine {
-  0% {transform: translateX(-100%);}
-  50% {transform: translateX(100%);}
-  100% {transform: translateX(100%);}
-}
-@keyframes fadeIn {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-@keyframes pulse {0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+.found-card { padding: 12px; border-radius: 10px; background: rgba(0,255,153,0.05); border: 1px solid var(--border); }
+.subject-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.sub-pill { padding: 6px 10px; border-radius: 8px; background: rgba(0,255,153,0.03); cursor: pointer; font-weight: 600; border: 1px solid var(--border); }
+.sub-pill:hover { transform: scale(1.1); background: rgba(0,255,153,0.1); }
+.sub-pill.active { border-color: var(--accent); background: linear-gradient(135deg, rgba(0,255,153,0.1), rgba(58,134,255,0.05)); }
 
-#printArea{position:fixed;left:-9999px;top:-9999px;width:794px;background:white;color:#111;padding:18px}
-#printArea h2{margin-top:0}
-table{width:100%;border-collapse:collapse;font-size:11px}
-table th, table td{padding:6px;border:1px solid #ddd}
-.toast{position:fixed;right:20px;bottom:20px;background:rgba(0,0,0,0.8);padding:10px 14px;border-radius:8px;color:white;font-weight:700;animation:fadeIn 0.3s ease}
+#particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; }
+.particle { position: absolute; font-size: 20px; opacity: 0.15; color: var(--accent); animation: float 12s infinite linear; }
+@keyframes float { 0% { transform: translateY(100vh) rotate(0deg); } 100% { transform: translateY(-100vh) rotate(360deg); } }
 
-.auth-card{display:flex;gap:12px;align-items:center}
-.input-small{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
-.user-badge{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.03)}
+#printArea { position: fixed; left: -9999px; top: -9999px; width: 794px; background: white; color: #111; padding: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+table th, table td { padding: 6px; border: 1px solid #ddd; }
+.toast { position: fixed; right: 20px; bottom: 20px; background: rgba(20,33,61,0.9); padding: 10px 14px; border-radius: 10px; color: var(--accent); font-weight: 600; animation: fadeIn 0.5s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.auth-card { display: flex; gap: 12px; align-items: center; }
+.input-small { padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); }
+.user-badge { padding: 6px 10px; border-radius: 999px; background: rgba(0,255,153,0.05); }
 
-@media (max-width:980px){ .layout{grid-template-columns:1fr} }
+@media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
+<div id="particles"></div>
 <div class="page">
 <header>
-<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#6b9cff,#3b82f6);display:flex;align-items:center;justify-content:center;font-weight:900">RC</div>
+<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--bg)">RC</div>
 <div style="flex:1">
-<h1>R.C Technical Institute — CO11 Attendance (Subject-wise)</h1>
-<div class="muted">Select date, subject, then search & mark students. Click subject pills to switch fast.</div>
+<h1>R.C Technical Institute — CO11 Attendance</h1>
+<div class="muted">Track attendance by date and subject with a sleek interface.</div>
 </div>
-
-<!-- Auth panel -->
-<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
-  <div id="authControls" class="auth-card">
-    <input id="auUsername" class="input-small" placeholder="username" autocomplete="username" />
-    <input id="auPassword" class="input-small" placeholder="password" type="password" autocomplete="current-password" />
-    <button id="btnAuthAction" class="btn-primary">Login / Signup</button>
-  </div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <div id="loggedInfo" class="user-badge">Not signed in</div>
-    <button id="btnLogoutTop" class="btn-ghost" style="display:none">Logout</button>
-  </div>
+<div class="auth-card">
+<input id="auUsername" class="input-small" placeholder="username" autocomplete="username" />
+<input id="auPassword" class="input-small" placeholder="password" type="password" autocomplete="current-password" />
+<button id="btnAuthAction" class="btn-primary">Login / Signup</button>
+</div>
+<div style="display:flex;gap:12px;align-items:center">
+<div id="loggedInfo" class="user-badge">Not signed in</div>
+<button id="btnLogoutTop" class="btn-ghost" style="display:none">Logout</button>
 </div>
 </header>
 
 <div class="layout">
 <div>
-<div class="card" style="margin-bottom:12px">
-<div class="card-header">
-<div class="title">🕒 Recent Attendance — per account</div>
-<div class="muted">Most recent at top</div>
-</div>
+<div class="card">
+<div class="card-header"><div class="title">🕒 Recent Marks</div><div class="muted">Subject-specific history</div></div>
 <div id="recentList"></div>
 </div>
-
 <div class="card">
-<div class="card-header"><div class="title">🔎 Search & Mark</div><div class="muted">Pick date, subject → search → mark</div></div>
-
-<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-<input id="dateSelect" type="date" style="width:150px" />
-<select id="subjectSelect" style="width:220px"></select>
-<input id="searchInput" type="text" placeholder="Enrollment or student name..." />
+<div class="card-header"><div class="title">🔎 Mark Attendance</div><div class="muted">Select date, subject, and mark</div></div>
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+<input id="dateSelect" type="date" style="width:140px" />
+<select id="subjectSelect" style="width:200px"></select>
+<input id="searchInput" type="text" placeholder="Enrollment or name..." style="flex:1" />
 <button id="searchBtn" class="btn-primary">Search</button>
 </div>
-
-<div id="foundArea"><div class="muted">Select date, subject, and search for a student to begin.</div></div>
-
-<div style="display:flex;gap:8px;align-items:center;margin-top:12px">
-<input id="deanEmail" type="text" placeholder="Dean email" style="width:320px;padding:10px;border-radius:8px" />
-<button id="finalizeBtn" class="btn-ghost">📤 Finalize & Email</button>
-<button id="downloadPdfBtn" class="btn-ghost">⬇️ Download PDF</button>
-<div style="margin-left:auto" class="muted">Auto-advance: ON</div>
+<div id="foundArea"><div class="muted">Select date, subject, and search to start.</div></div>
+<div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+<input id="deanEmail" type="text" placeholder="Dean email" style="flex:1" />
+<button id="finalizeBtn" class="btn-primary">📤 Email Report</button>
+<button id="downloadPdfBtn" class="btn-ghost">⬇️ PDF</button>
 </div>
 </div>
 </div>
-
 <div>
 <div class="card">
-<div class="card-header"><div class="title">📋 Students (CO11)</div><div class="muted">Click a student to open mark pane</div></div>
+<div class="card-header"><div class="title">📋 Students</div><div class="muted">Click to mark</div></div>
 <div class="master-container" id="masterContainer"><div id="masterList"></div></div>
 </div>
 </div>
@@ -157,124 +175,149 @@ table th, table td{padding:6px;border:1px solid #ddd}
 <div id="printArea" aria-hidden="true"></div>
 
 <script>
-/* ---------- Subjects ---------- */
-const SUBJECTS = ['CPF','MATHS','PHYSICS','BE','ENGLISH','CBSWPD'];
-const CPF_FUNCTIONS = {
-  'C': ['printf', 'scanf', 'main', 'getch'],
-  'C++': ['cout', 'cin', 'main', 'class'],
-  'Python': ['print', 'input', 'def', 'if __name__ == "__main__"'],
-  'JavaScript': ['console.log', 'function', 'let', 'const']
+const SUBJECTS = ['CPF', 'MATHS', 'PHYSICS', 'BE', 'ENGLISH', 'CBSWPD'];
+const subjectSymbols = {
+  'CPF': ['{', '}', ';', '=>', 'def', 'print'],
+  'MATHS': ['∑', '∫', 'π', '√', '∞', 'Δ'],
+  'PHYSICS': ['λ', 'μ', 'Ω', 'V', 'F', 'g'],
+  'BE': ['⚙', '🔌', '🔋', '🛠', '🔩', '🔧'],
+  'ENGLISH': ['📖', '✍', '❝', 'A', '!', '?'],
+  'CBSWPD': ['💬', '🎤', '📢', '📧', '🤝', '📈']
 };
-
-/* ---------- Students (full list) ---------- */
 const realStudents = [
-{ enrollmentNumber: "COMP101", name: "AGRAVAT SUNNY HASMUKHBHAI", class: "CO11", total: "4 / 7" },
-{ enrollmentNumber: "COMP102", name: "AMIN VIDHI HARSIDDHKUMAR", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP103", name: "ANSARIJULAYA MOHAMMAD TALHA", class: "CO11", total: "2 / 7" },
-{ enrollmentNumber: "COMP105", name: "BADI MOHMADSALIK RASUL", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP106", name: "BARAD PRIYABEN SURESHBHAI", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP108", name: "BAROT SHLOK NAYANKUMAR", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP109", name: "BASANTANI SUMIT GOPICHAND", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP110", name: "BHAND YASH SUBHASHCHANDRA", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP111", name: "BHARVAD HARDIK BHIMABHAI", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP113", name: "BHATIYA DEEP BHAVESHBHAI", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP114", name: "BHURIYA HETVI YOGESHKUMAR", class: "CO11", total: "4 / 7" },
-{ enrollmentNumber: "COMP115", name: "BRAHMBHATT JIYA BHAVESH", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP116", name: "BUHA SNEH GIRISHBHAI", class: "CO11", total: "1 / 7" },
-{ enrollmentNumber: "COMP117", name: "BUKHARI ALISHAN ALIRAZA", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP118", name: "BUKHARI TABISH MAHEDI ALIRAZA", class: "CO11", total: "2 / 7" },
-{ enrollmentNumber: "COMP120", name: "CHAUHAN ASHISHBHAI KANTIBHAI", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP122", name: "CHAUHAN JAHNAVI SOHAGKUMAR", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP123", name: "CHAUHAN KARAN GUNVANTBHAI", class: "CO11", total: "1 / 7" },
-{ enrollmentNumber: "COMP124", name: "CHAUHAN RISHI BHUPENDRABHAI", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP127", name: "CHAUHAN USMITA MAHESHJI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP129", name: "CHAVADA PRATIK KISHANSINH", class: "CO11", total: "4 / 7" },
-{ enrollmentNumber: "COMP130", name: "CHHODBADIA DEEP MEHULKUMAR", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP131", name: "DABHI MITRAJSINH SANJAYSINH", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP132", name: "DANAK VATSAL JANAKKUMAR", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP134", name: "DARJI ASHVINI SURESHKUMAR", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP135", name: "DARJI AYUSH MAHESHBHAI", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP136", name: "DARJI JAL VINODBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP137", name: "DARJI JAY MANISHBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP139", name: "DARJI SHLOK JITENDRAKUMAR", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP140", name: "DARJI SIDDHIBEN KANTIBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP141", name: "DAVE AAYUSH MEHULBHAI", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP143", name: "DAVE DHRUV JITENDRAKUMAR", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP144", name: "DAVE KHWAISH MEHUL", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP145", name: "DAVE SHIVAM RUPESHKUMAR", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP146", name: "DEDAKIYA JAYMIN NAYANBHAI", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP147", name: "DESAI ANKESHKUMAR MERAJBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP148", name: "DESAI ISHAN NARANBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP149", name: "DESAI PRAKASHBHAI RANABHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP150", name: "DHOBI HARSH SACHINKUMAR", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP151", name: "DHOKIYA SHLOKKUMAR ARAVINDBHAI", class: "CO11", total: "2 / 7" },
-{ enrollmentNumber: "COMP152", name: "DHRUVESH PATEL", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP153", name: "DIVYESH MITESH CHHATBAR", class: "CO11", total: "4 / 7" },
-{ enrollmentNumber: "COMP154", name: "DIWAN AKSHAY AMIT", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP155", name: "DIWAN REHAN AHMED MO. JAVED", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP156", name: "DOMADIYA MEET SHAILESHBHAI", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP157", name: "DOMADIYA MOHIT RATILAL", class: "CO11", total: "2 / 7" },
-{ enrollmentNumber: "COMP158", name: "DONGA YUG VIPULBHAI", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP160", name: "GADHAVI TWISHA VIJAYDAN", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP162", name: "GAJJAR RUDRA MAULIK", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP163", name: "GAUTAM SHUBHAM SATYAPRAKASH", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP164", name: "GORE SAKSHI VILAS", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP165", name: "GORECHA SHUBHAM HIRENKUMAR", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP167", name: "GOTHI KULDEEPKUMAR DHARMENDRA", class: "CO11", total: "2 / 7" },
-{ enrollmentNumber: "COMP168", name: "GUPTA VANSHIK PARESHKUMAR", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP169", name: "GURJAR PARTHKUMAR DEVRAMBHAI", class: "CO11", total: "7 / 7" },
-{ enrollmentNumber: "COMP171", name: "HENIL PARIKH", class: "CO11", total: "2 / 7" },
-{ enrollmentNumber: "COMP172", name: "JADAV VAIDIK VIJAYBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP173", name: "JAIN DARSHIL JITENDRA", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP174", name: "JAIN LOVE MANISHBHAI", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP175", name: "JAISVAR ABHISHEK RAMBALI", class: "CO11", total: "0 / 7" },
-{ enrollmentNumber: "COMP176", name: "JANDIYA VAIBHAV ISHWARBHAI", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP177", name: "JANI YASHVI VIPULBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP178", name: "JAWALE DHAKESH YOGESH", class: "CO11", total: "1 / 7" },
-{ enrollmentNumber: "COMP179", name: "JAYSWAL DAKSH DIPAKKUMAR", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP180", name: "BHALIYA BHAIRAVI KIRITBHAI", class: "CO11", total: "0 / 7" },
-{ enrollmentNumber: "COMP181", name: "BHAVSAR KARTIK MITESHKUMAR", class: "CO11", total: "4 / 7" },
-{ enrollmentNumber: "COMP182", name: "BHAVYA CHANDRAKANT PRAJAPATI", class: "CO11", total: "3 / 7" },
-{ enrollmentNumber: "COMP183", name: "CHAUDHARI BHAVY DINESHBHAI", class: "CO11", total: "0 / 7" },
-{ enrollmentNumber: "COMP184", name: "CHAUHAN DIXITA DILIPBHAI", class: "CO11", total: "5 / 7" },
-{ enrollmentNumber: "COMP185", name: "CHAUHAN VIVEK", class: "CO11", total: "0 / 7" },
-{ enrollmentNumber: "COMP186", name: "CHHATBAR HET ALPESH", class: "CO11", total: "0 / 7" },
-{ enrollmentNumber: "COMP187", name: "CHITRODA JAY SANJAYBHAI", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP188", name: "DARJI ARYAN SANJAYBHAI", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP189", name: "DESAI ARYAN KALPESHBHAI", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP191", name: "DODIYA ADITI BHUPENDRABHAI", class: "CO11", total: "4 / 7" },
-{ enrollmentNumber: "COMP192", name: "GAJJAR BHAVYAKUMAR VIPULKUMAR", class: "CO11", total: "6 / 7" },
-{ enrollmentNumber: "COMP193", name: "GANDHARVA KARINA JITESHKUMAR", class: "CO11", total: "2 / 7" },
-{ enrollmentNumber: "COMP194", name: "HEMAL NAGAR", class: "CO11", total: "0 / 7" },
-{ enrollmentNumber: "COMP195", name: "KANHA SENJALIYA", class: "CO11", total: "6 / 7" }
+{ enrollmentNumber: "COMP101", name: "AGRAVAT SUNNY HASMUKHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP102", name: "AMIN VIDHI HARSIDDHKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP103", name: "ANSARIJULAYA MOHAMMAD TALHA", class: "CO11" },
+{ enrollmentNumber: "COMP105", name: "BADI MOHMADSALIK RASUL", class: "CO11" },
+{ enrollmentNumber: "COMP106", name: "BARAD PRIYABEN SURESHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP108", name: "BAROT SHLOK NAYANKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP109", name: "BASANTANI SUMIT GOPICHAND", class: "CO11" },
+{ enrollmentNumber: "COMP110", name: "BHAND YASH SUBHASHCHANDRA", class: "CO11" },
+{ enrollmentNumber: "COMP111", name: "BHARVAD HARDIK BHIMABHAI", class: "CO11" },
+{ enrollmentNumber: "COMP113", name: "BHATIYA DEEP BHAVESHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP114", name: "BHURIYA HETVI YOGESHKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP115", name: "BRAHMBHATT JIYA BHAVESH", class: "CO11" },
+{ enrollmentNumber: "COMP116", name: "BUHA SNEH GIRISHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP117", name: "BUKHARI ALISHAN ALIRAZA", class: "CO11" },
+{ enrollmentNumber: "COMP118", name: "BUKHARI TABISH MAHEDI ALIRAZA", class: "CO11" },
+{ enrollmentNumber: "COMP120", name: "CHAUHAN ASHISHBHAI KANTIBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP122", name: "CHAUHAN JAHNAVI SOHAGKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP123", name: "CHAUHAN KARAN GUNVANTBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP124", name: "CHAUHAN RISHI BHUPENDRABHAI", class: "CO11" },
+{ enrollmentNumber: "COMP127", name: "CHAUHAN USMITA MAHESHJI", class: "CO11" },
+{ enrollmentNumber: "COMP129", name: "CHAVADA PRATIK KISHANSINH", class: "CO11" },
+{ enrollmentNumber: "COMP130", name: "CHHODBADIA DEEP MEHULKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP131", name: "DABHI MITRAJSINH SANJAYSINH", class: "CO11" },
+{ enrollmentNumber: "COMP132", name: "DANAK VATSAL JANAKKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP134", name: "DARJI ASHVINI SURESHKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP135", name: "DARJI AYUSH MAHESHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP136", name: "DARJI JAL VINODBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP137", name: "DARJI JAY MANISHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP139", name: "DARJI SHLOK JITENDRAKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP140", name: "DARJI SIDDHIBEN KANTIBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP141", name: "DAVE AAYUSH MEHULBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP143", name: "DAVE DHRUV JITENDRAKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP144", name: "DAVE KHWAISH MEHUL", class: "CO11" },
+{ enrollmentNumber: "COMP145", name: "DAVE SHIVAM RUPESHKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP146", name: "DEDAKIYA JAYMIN NAYANBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP147", name: "DESAI ANKESHKUMAR MERAJBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP148", name: "DESAI ISHAN NARANBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP149", name: "DESAI PRAKASHBHAI RANABHAI", class: "CO11" },
+{ enrollmentNumber: "COMP150", name: "DHOBI HARSH SACHINKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP151", name: "DHOKIYA SHLOKKUMAR ARAVINDBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP152", name: "DHRUVESH PATEL", class: "CO11" },
+{ enrollmentNumber: "COMP153", name: "DIVYESH MITESH CHHATBAR", class: "CO11" },
+{ enrollmentNumber: "COMP154", name: "DIWAN AKSHAY AMIT", class: "CO11" },
+{ enrollmentNumber: "COMP155", name: "DIWAN REHAN AHMED MO. JAVED", class: "CO11" },
+{ enrollmentNumber: "COMP156", name: "DOMADIYA MEET SHAILESHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP157", name: "DOMADIYA MOHIT RATILAL", class: "CO11" },
+{ enrollmentNumber: "COMP158", name: "DONGA YUG VIPULBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP160", name: "GADHAVI TWISHA VIJAYDAN", class: "CO11" },
+{ enrollmentNumber: "COMP162", name: "GAJJAR RUDRA MAULIK", class: "CO11" },
+{ enrollmentNumber: "COMP163", name: "GAUTAM SHUBHAM SATYAPRAKASH", class: "CO11" },
+{ enrollmentNumber: "COMP164", name: "GORE SAKSHI VILAS", class: "CO11" },
+{ enrollmentNumber: "COMP165", name: "GORECHA SHUBHAM HIRENKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP167", name: "GOTHI KULDEEPKUMAR DHARMENDRA", class: "CO11" },
+{ enrollmentNumber: "COMP168", name: "GUPTA VANSHIK PARESHKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP169", name: "GURJAR PARTHKUMAR DEVRAMBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP171", name: "HENIL PARIKH", class: "CO11" },
+{ enrollmentNumber: "COMP172", name: "JADAV VAIDIK VIJAYBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP173", name: "JAIN DARSHIL JITENDRA", class: "CO11" },
+{ enrollmentNumber: "COMP174", name: "JAIN LOVE MANISHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP175", name: "JAISVAR ABHISHEK RAMBALI", class: "CO11" },
+{ enrollmentNumber: "COMP176", name: "JANDIYA VAIBHAV ISHWARBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP177", name: "JANI YASHVI VIPULBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP178", name: "JAWALE DHAKESH YOGESH", class: "CO11" },
+{ enrollmentNumber: "COMP179", name: "JAYSWAL DAKSH DIPAKKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP180", name: "BHALIYA BHAIRAVI KIRITBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP181", name: "BHAVSAR KARTIK MITESHKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP182", name: "BHAVYA CHANDRAKANT PRAJAPATI", class: "CO11" },
+{ enrollmentNumber: "COMP183", name: "CHAUDHARI BHAVY DINESHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP184", name: "CHAUHAN DIXITA DILIPBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP185", name: "CHAUHAN VIVEK", class: "CO11" },
+{ enrollmentNumber: "COMP186", name: "CHHATBAR HET ALPESH", class: "CO11" },
+{ enrollmentNumber: "COMP187", name: "CHITRODA JAY SANJAYBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP188", name: "DARJI ARYAN SANJAYBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP189", name: "DESAI ARYAN KALPESHBHAI", class: "CO11" },
+{ enrollmentNumber: "COMP191", name: "DODIYA ADITI BHUPENDRABHAI", class: "CO11" },
+{ enrollmentNumber: "COMP192", name: "GAJJAR BHAVYAKUMAR VIPULKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP193", name: "GANDHARVA KARINA JITESHKUMAR", class: "CO11" },
+{ enrollmentNumber: "COMP194", name: "HEMAL NAGAR", class: "CO11" },
+{ enrollmentNumber: "COMP195", name: "KANHA SENJALIYA", class: "CO11" }
 ];
+let attendanceRecords = {};
+let recentAttendance = SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
 
-/* ---------- Per-account storage keys & simple auth (local only) ---------- */
 const USERS_KEY = 'rc_users_v1';
 const CURRENT_KEY = 'rc_current_user_v1';
-function readJSON(key){ try{ return JSON.parse(localStorage.getItem(key)); }catch(e){return null;} }
-function writeJSON(key,val){ localStorage.setItem(key, JSON.stringify(val)); }
-function getUsers(){ return readJSON(USERS_KEY) || {}; }
-function setUsers(o){ writeJSON(USERS_KEY, o); }
-async function hashString(str){ const enc = new TextEncoder().encode(str); const buf = await crypto.subtle.digest('SHA-256', enc); const arr = Array.from(new Uint8Array(buf)); return arr.map(b=>b.toString(16).padStart(2,'0')).join(''); }
+function readJSON(key) { try { return JSON.parse(localStorage.getItem(key)); } catch(e) { return null; } }
+function writeJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+function getUsers() { return readJSON(USERS_KEY) || {}; }
+function setUsers(o) { writeJSON(USERS_KEY, o); }
+async function hashString(str) {
+  const enc = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function createAccount(username, password) {
+  username = username.trim().toLowerCase();
+  if (!username || password.length < 3) throw new Error('Invalid username or password');
+  const users = getUsers();
+  if (users[username]) throw new Error('Username taken');
+  users[username] = { pwdHash: await hashString(password), created: new Date().toISOString() };
+  setUsers(users);
+  return users[username];
+}
+async function loginAccount(username, password) {
+  username = username.trim().toLowerCase();
+  const users = getUsers();
+  const u = users[username];
+  if (!u) throw new Error('User not found');
+  if (await hashString(password) !== u.pwdHash) throw new Error('Invalid password');
+  writeJSON(CURRENT_KEY, { username, loggedAt: new Date().toISOString() });
+  return { username };
+}
+function logout() { localStorage.removeItem(CURRENT_KEY); onAuthChanged(); }
+function getCurrent() { return readJSON(CURRENT_KEY); }
+function dataKeyFor(username) { return `rc_account_data_v1::${username}`; }
+function saveAccountData(username, payload) { writeJSON(dataKeyFor(username), payload); }
+function loadAccountData(username) { return readJSON(dataKeyFor(username)); }
 
-async function createAccount(username, email, password){ username = String(username||'').trim().toLowerCase(); if(!username) throw new Error('username required'); if(String(password||'').length < 3) throw new Error('password too short'); const users = getUsers(); if(users[username]) throw new Error('username taken'); const pwdHash = await hashString(password || ''); users[username] = { email: email||'', pwdHash, created: new Date().toISOString() }; setUsers(users); return users[username]; }
-async function loginAccount(username, password){ username = String(username||'').trim().toLowerCase(); const users = getUsers(); const u = users[username]; if(!u) throw new Error('user not found'); const h = await hashString(password||''); if(h !== u.pwdHash) throw new Error('invalid password'); writeJSON(CURRENT_KEY, { username, email: u.email, loggedAt: new Date().toISOString() }); return { username, email: u.email }; }
-function logout(){ localStorage.removeItem(CURRENT_KEY); onAuthChanged(); }
-function getCurrent(){ return readJSON(CURRENT_KEY); }
-function dataKeyFor(username){ return `rc_account_data_v1::${username}`; }
-function saveAccountData(username, payload){ writeJSON(dataKeyFor(username), payload); }
-function loadAccountData(username){ return readJSON(dataKeyFor(username)); }
+function saveStateForCurrent() {
+  const cur = getCurrent();
+  if (!cur) return;
+  saveAccountData(cur.username, { attendanceRecords, recentAttendance, timestamp: new Date().toISOString() });
+}
+function loadStateForCurrent() {
+  const cur = getCurrent();
+  if (!cur) return;
+  const parsed = loadAccountData(cur.username);
+  if (parsed) {
+    attendanceRecords = parsed.attendanceRecords || {};
+    recentAttendance = parsed.recentAttendance || SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+  }
+}
 
-/* ---------- Attendance store (subject-wise, date-wise) — will be loaded per-account ---------- */
-let attendanceRecords = {}; // per-account in-memory
-let recentAttendance = [];
-
-/* ---------- Persistent saving/loading (per account) ---------- */
-function saveStateForCurrent(){ const cur = getCurrent(); if(!cur){ console.warn('No user signed in — not saving'); return; } const payload = { attendanceRecords, recentAttendance, timestamp: new Date().toISOString() }; saveAccountData(cur.username, payload); console.info('Saved state for', cur.username); }
-function loadStateForCurrent(){ const cur = getCurrent(); if(!cur) return; const parsed = loadAccountData(cur.username); if(!parsed) return; attendanceRecords = parsed.attendanceRecords || {}; recentAttendance = Array.isArray(parsed.recentAttendance) ? parsed.recentAttendance.slice(0,500) : []; console.info('Loaded account data for', cur.username, parsed.timestamp || 'unknown'); }
-
-/* UI refs */
 const dateSelect = document.getElementById('dateSelect');
 const subjectSelect = document.getElementById('subjectSelect');
 const searchInput = document.getElementById('searchInput');
@@ -282,580 +325,418 @@ const searchBtn = document.getElementById('searchBtn');
 const foundArea = document.getElementById('foundArea');
 const recentList = document.getElementById('recentList');
 const masterList = document.getElementById('masterList');
-const masterContainer = document.getElementById('masterContainer');
 const finalizeBtn = document.getElementById('finalizeBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 const deanEmailInput = document.getElementById('deanEmail');
 const printArea = document.getElementById('printArea');
-
-/* Auth UI refs */
 const auUsername = document.getElementById('auUsername');
 const auPassword = document.getElementById('auPassword');
 const btnAuthAction = document.getElementById('btnAuthAction');
 const loggedInfo = document.getElementById('loggedInfo');
 const btnLogoutTop = document.getElementById('btnLogoutTop');
+const particles = document.getElementById('particles');
 
-/* ---------- Helpers ---------- */
-function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function capitalize(s){ if(!s) return s; return s.charAt(0).toUpperCase()+s.slice(1); }
+function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 function formatDate(date) { return date.toISOString().split('T')[0]; }
 
-/* ---------- Init date and subjects dropdown ---------- */
-function initDateAndSubjects(){ 
+function initDateAndSubjects() {
   dateSelect.value = formatDate(new Date());
-  SUBJECTS.forEach(sub=>{ 
-    const opt = document.createElement('option'); 
-    opt.value = sub; 
-    opt.textContent = sub; 
-    subjectSelect.appendChild(opt); 
-  }); 
-  subjectSelect.addEventListener('change', ()=> { 
-    const currentEnroll = (searchInput.value||'').trim(); 
-    if(currentEnroll){ 
-      const student = findStudent(currentEnroll); 
-      if(student) showFound(student); 
-    } 
-    renderMasterList(); 
-    if(subjectSelect.value === 'CPF') showCPFPopup();
-  }); 
+  SUBJECTS.forEach(sub => {
+    const opt = document.createElement('option');
+    opt.value = sub;
+    opt.textContent = sub;
+    subjectSelect.appendChild(opt);
+  });
+  subjectSelect.addEventListener('change', () => {
+    const student = findStudent(searchInput.value.trim());
+    if (student) showFound(student);
+    renderRecent();
+    renderMasterList();
+    updateBackgroundSymbols(subjectSelect.value);
+  });
   dateSelect.addEventListener('change', () => {
-    const currentEnroll = (searchInput.value||'').trim();
-    if(currentEnroll){
-      const student = findStudent(currentEnroll);
-      if(student) showFound(student);
-    }
+    const student = findStudent(searchInput.value.trim());
+    if (student) showFound(student);
+    renderRecent();
     renderMasterList();
   });
+  updateBackgroundSymbols(SUBJECTS[0]);
+  renderMasterList(); // Ensure initial render
 }
 initDateAndSubjects();
 
-/* ---------- CPF Symbol Popup ---------- */
-let cpfPopup = null;
-function showCPFPopup(){
-  if(cpfPopup) return;
-  cpfPopup = document.createElement('div');
-  cpfPopup.className = 'cpf-popup';
-  cpfPopup.style.position = 'absolute';
-  cpfPopup.style.background = 'rgba(0,0,0,0.9)';
-  cpfPopup.style.color = '#fff';
-  cpfPopup.style.padding = '12px';
-  cpfPopup.style.borderRadius = '8px';
-  cpfPopup.style.top = '50%';
-  cpfPopup.style.left = '50%';
-  cpfPopup.style.transform = 'translate(-50%, -50%)';
-  cpfPopup.style.zIndex = '1000';
-  cpfPopup.style.animation = 'fadeIn 0.3s ease';
-  
-  const languages = Object.keys(CPF_FUNCTIONS);
-  const selectHtml = `
-    <select id="cpfLanguage">
-      ${languages.map(lang => `<option value="${lang}">${lang}</option>`).join('')}
-    </select>
-  `;
-  
-  cpfPopup.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <div style="font-weight:800">Select CPF Language & Function</div>
-      ${selectHtml}
-      <div id="cpfFunctions" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px"></div>
-      <button id="cpfClose" class="btn-ghost">Close</button>
+function updateBackgroundSymbols(subject) {
+  particles.innerHTML = '';
+  const symbols = subjectSymbols[subject] || [];
+  for (let i = 0; i < 30; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.textContent = symbols[Math.floor(Math.random() * symbols.length)] || '?';
+    p.style.left = `${Math.random() * 100}%`;
+    p.style.fontSize = `${Math.random() * 20 + 15}px`;
+    p.style.animationDuration = `${Math.random() * 10 + 8}s`;
+    p.style.animationDelay = `-${Math.random() * 10}s`;
+    particles.appendChild(p);
+  }
+}
+
+function findStudent(q) {
+  if (!q) return null;
+  q = q.trim().toLowerCase();
+  return realStudents.find(s => s.enrollmentNumber.toLowerCase() === q || s.name.toLowerCase() === q) ||
+         realStudents.find(s => s.enrollmentNumber.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) || null;
+}
+
+function renderRecent() {
+  const subject = subjectSelect.value;
+  recentList.innerHTML = '';
+  (recentAttendance[subject] || []).forEach(rec => {
+    const row = document.createElement('div');
+    row.className = 'rec-row';
+    row.innerHTML = `
+      <div class="left">
+        <div class="avatar">${(rec.studentName || '--').split(' ').slice(0,2).map(w=>w[0]).join('')}</div>
+        <div>
+          <div class="student-name">${escapeHtml(rec.studentName)}</div>
+          <div class="meta">${rec.enrollmentNumber} • ${rec.date}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="badge ${rec.status}">${capitalize(rec.status)}</div>
+        <button class="btn-ghost">Edit</button>
+      </div>
+    `;
+    row.querySelector('button').addEventListener('click', e => {
+      e.stopPropagation();
+      openEditPopup(rec.enrollmentNumber, row.querySelector('button'), rec.subject, rec.date);
+    });
+    recentList.appendChild(row);
+  });
+}
+
+function renderMasterList() {
+  masterList.innerHTML = '';
+  if (!realStudents.length) {
+    masterList.innerHTML = '<div class="muted">No students available.</div>';
+    showToast('Student list is empty');
+    return;
+  }
+  const date = dateSelect.value;
+  const subject = subjectSelect.value;
+  realStudents.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'master-item';
+    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+    const status = rec.dates[date] && rec.dates[date][subject] ? rec.dates[date][subject].status : '—';
+    div.innerHTML = `
+      <div class="master-left">
+        <div>
+          <div class="student-name">${escapeHtml(s.name)}</div>
+          <div class="meta">${escapeHtml(s.enrollmentNumber)}</div>
+        </div>
+      </div>
+      <div class="master-status">Status: ${capitalize(status)}</div>
+    `;
+    div.addEventListener('click', () => {
+      showFound(s);
+      searchInput.value = s.enrollmentNumber;
+    });
+    masterList.appendChild(div);
+  });
+}
+
+function showFound(student) {
+  if (!student) {
+    foundArea.innerHTML = '<div class="muted">Student not found.</div>';
+    return;
+  }
+  const date = dateSelect.value;
+  const subject = subjectSelect.value;
+  const rec = attendanceRecords[student.enrollmentNumber] || { dates: {} };
+  const current = rec.dates[date] && rec.dates[date][subject] || null;
+  foundArea.innerHTML = `
+    <div class="found-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="student-name">${escapeHtml(student.name)}</div>
+          <div class="meta">${escapeHtml(student.enrollmentNumber)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="title">${escapeHtml(subject)} - ${date}</div>
+          <div class="meta">${current ? capitalize(current.status) : '—'}</div>
+        </div>
+      </div>
+      <div class="subject-pills">
+        ${SUBJECTS.map(s => `<span class="sub-pill ${s === subject ? 'active' : ''}" data-sub="${s}">${s}</span>`).join('')}
+      </div>
+      <hr style="margin:10px 0;border:none;border-top:1px solid var(--border)">
+      <div style="display:flex;gap:10px;align-items:center">
+        <button data-action="present" class="btn-ok">Present</button>
+        <button data-action="late" class="btn-warn">Late</button>
+        <button data-action="absent" class="btn-bad">Absent</button>
+        <button id="undoBtn" class="btn-ghost">Undo</button>
+        <button id="nextBtn" class="btn-primary">Next</button>
+      </div>
     </div>
   `;
-  
-  document.body.appendChild(cpfPopup);
-  
-  function updateFunctions(lang){
-    const funcs = CPF_FUNCTIONS[lang] || [];
-    const funcContainer = document.getElementById('cpfFunctions');
-    funcContainer.innerHTML = funcs.map(f => `
-      <button class="btn-primary cpf-func" style="animation:pulse 1s infinite">${f}</button>
-    `).join('');
-    
-    funcContainer.querySelectorAll('.cpf-func').forEach(btn => {
-      btn.addEventListener('click', () => {
-        showToast(`Selected ${lang} function: ${btn.textContent}`);
-        closeCPFPopup();
-      });
+  foundArea.querySelectorAll('.sub-pill').forEach(el => {
+    el.addEventListener('click', () => {
+      subjectSelect.value = el.getAttribute('data-sub');
+      subjectSelect.dispatchEvent(new Event('change'));
     });
-  }
-  
-  updateFunctions(languages[0]);
-  
-  document.getElementById('cpfLanguage').addEventListener('change', (e) => {
-    updateFunctions(e.target.value);
   });
-  
-  document.getElementById('cpfClose').addEventListener('click', closeCPFPopup);
+  foundArea.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!getCurrent()) return showToast('Please sign in');
+      markSubject(student, subject, btn.getAttribute('data-action'), date);
+    });
+  });
+  document.getElementById('undoBtn').addEventListener('click', () => clearSubjectMark(student, subject, date));
+  document.getElementById('nextBtn').addEventListener('click', () => autoAdvanceToNext(student.enrollmentNumber));
 }
-function closeCPFPopup(){
-  if(cpfPopup){
-    cpfPopup.remove();
-    cpfPopup = null;
+
+function ensureRecord(enrollmentNumber) {
+  if (!attendanceRecords[enrollmentNumber]) attendanceRecords[enrollmentNumber] = { dates: {} };
+  return attendanceRecords[enrollmentNumber];
+}
+function markSubject(student, subject, status, date) {
+  const rec = ensureRecord(student.enrollmentNumber);
+  if (!rec.dates[date]) rec.dates[date] = {};
+  rec.dates[date][subject] = { status, timestamp: new Date().toLocaleTimeString() };
+  recentAttendance[subject].unshift({
+    id: Date.now().toString(),
+    studentName: student.name,
+    enrollmentNumber: student.enrollmentNumber,
+    status,
+    subject,
+    date,
+    timestamp: rec.dates[date][subject].timestamp
+  });
+  recentAttendance[subject] = recentAttendance[subject].slice(0, 100);
+  renderRecent();
+  renderMasterList();
+  saveStateForCurrent();
+  showToast(`Marked ${status} for ${student.name}`);
+  autoAdvanceToNext(student.enrollmentNumber);
+}
+function clearSubjectMark(student, subject, date) {
+  const rec = attendanceRecords[student.enrollmentNumber];
+  if (rec && rec.dates[date] && rec.dates[date][subject]) {
+    delete rec.dates[date][subject];
+    if (!Object.keys(rec.dates[date]).length) delete rec.dates[date];
   }
+  recentAttendance[subject] = recentAttendance[subject].filter(r => r.enrollmentNumber !== student.enrollmentNumber || r.date !== date);
+  renderRecent();
+  renderMasterList();
+  saveStateForCurrent();
+  showToast('Mark cleared');
 }
 
-/* ---------- Search logic ---------- */
-function findStudent(q){ if(!q) return null; q = q.trim(); const exactEnroll = realStudents.find(s => s.enrollmentNumber.toLowerCase() === q.toLowerCase()); if(exactEnroll) return exactEnroll; const exactName = realStudents.find(s => s.name.toLowerCase() === q.toLowerCase()); if(exactName) return exactName; const low = q.toLowerCase(); return realStudents.find(s => s.enrollmentNumber.toLowerCase().includes(low) || s.name.toLowerCase().includes(low)) || null; }
-
-/* ---------- Renderers ---------- */
-function renderRecent(){ 
-  recentList.innerHTML = ''; 
-  recentAttendance.forEach(rec=>{ 
-    const row = document.createElement('div'); 
-    row.className='rec-row'; 
-    const left = document.createElement('div'); 
-    left.className='left'; 
-    const av = document.createElement('div'); 
-    av.className='avatar'; 
-    av.textContent = (rec.studentName||'--').split(' ').slice(0,2).map(w=>w[0]||'').join(''); 
-    const info = document.createElement('div'); 
-    info.style.minWidth='0'; 
-    const name = document.createElement('div'); 
-    name.className='student-name'; 
-    name.textContent = rec.studentName; 
-    const meta = document.createElement('div'); 
-    meta.className='meta'; 
-    meta.textContent = `${rec.enrollmentNumber} • ${rec.class} • ${rec.subject} • ${rec.date} ${rec.timestamp || ''}`; 
-    info.appendChild(name); 
-    info.appendChild(meta); 
-    left.appendChild(av); 
-    left.appendChild(info); 
-    const right = document.createElement('div'); 
-    right.style.display='flex'; 
-    right.style.flexDirection='column'; 
-    right.style.alignItems='flex-end'; 
-    const badge = document.createElement('div'); 
-    badge.className='badge ' + (rec.status || '').toLowerCase(); 
-    badge.textContent = capitalize(rec.status || 'Not marked'); 
-    const editBtn = document.createElement('button'); 
-    editBtn.className='btn-ghost'; 
-    editBtn.textContent='Edit'; 
-    editBtn.addEventListener('click', (e)=>{ 
-      e.stopPropagation(); 
-      openEditPopup(rec.enrollmentNumber, editBtn, rec.subject, rec.date); 
-    }); 
-    right.appendChild(badge); 
-    right.appendChild(editBtn); 
-    row.appendChild(left); 
-    row.appendChild(right); 
-    recentList.appendChild(row); 
-  }); 
-}
-
-function renderMasterList(){ 
-  masterList.innerHTML = ''; 
-  realStudents.forEach(s=>{ 
-    const div = document.createElement('div'); 
-    div.className='master-item'; 
-    const left = document.createElement('div'); 
-    left.className='master-left'; 
-    const title = document.createElement('div'); 
-    title.style.minWidth='0'; 
-    title.innerHTML = `<div style="font-weight:800">${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.enrollmentNumber)}</div>`; 
-    left.appendChild(title); 
-    const right = document.createElement('div'); 
-    right.style.display='flex'; 
-    right.style.alignItems='center'; 
-    right.style.gap='12px'; 
-    const date = dateSelect.value;
-    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} }; 
-    let presentCount = 0; 
-    SUBJECTS.forEach(sub=>{ 
-      if(rec.dates && rec.dates[date] && rec.dates[date][sub] && rec.dates[date][sub].status === 'present') presentCount++; 
-    }); 
-    const stat = document.createElement('div'); 
-    stat.className='master-status'; 
-    stat.textContent = `Present: ${presentCount}`; 
-    right.appendChild(stat); 
-    div.appendChild(left); 
-    div.appendChild(right); 
-    div.addEventListener('click', ()=>{ showFound(s); }); 
-    masterList.appendChild(div); 
-  }); 
-}
-
-/* ---------- Found card ---------- */
-function showFound(student){ 
-  if(!student){ 
-    foundArea.innerHTML = '<div class="muted">Student not found.</div>'; 
-    return; 
-  } 
-  clearMasterHighlights(); 
-  const date = dateSelect.value;
-  const subject = subjectSelect.value || SUBJECTS[0]; 
-  const rec = attendanceRecords[student.enrollmentNumber] || { dates: {} }; 
-  const current = rec.dates[date] && rec.dates[date][subject] || null; 
-  const pillsHtml = SUBJECTS.map(s => { 
-    const cls = s === subject ? 'sub-pill active' + (s === 'CPF' ? ' cpf-symbol' : '') : 'sub-pill' + (s === 'CPF' ? ' cpf-symbol' : ''); 
-    return `<span class="${cls}" data-sub="${s}">${escapeHtml(s)}</span>`; 
-  }).join(''); 
-  foundArea.innerHTML = ` 
-    <div class="found-card"> 
-      <div style="display:flex;justify-content:space-between;align-items:center"> 
-        <div> 
-          <div style="font-weight:800">${escapeHtml(student.name)}</div> 
-          <div class="meta">${escapeHtml(student.enrollmentNumber)} • ${escapeHtml(student.class)}</div> 
-        </div> 
-        <div style="text-align:right"> 
-          <div style="font-weight:800">Subject: ${escapeHtml(subject)}</div> 
-          <div style="font-weight:800">Date: ${date}</div>
-          <div class="meta">Current: ${current ? current.status : '—'}</div> 
-        </div> 
-      </div> 
-      <div class="subject-pills" id="subjectPills">${pillsHtml}</div> 
-      <hr style="margin:10px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)"> 
-      <div style="display:flex;gap:8px;align-items:center"> 
-        <button data-action="present" class="btn-ok">Present</button> 
-        <button data-action="late" class="btn-warn">Late</button> 
-        <button data-action="absent" class="btn-bad">Absent</button> 
-        <button id="undoBtn" class="btn-ghost">Undo</button> 
-        <button id="nextBtn" class="btn-ghost">Next</button> 
-      </div> 
-    </div> 
-  `; 
-  document.querySelectorAll('#subjectPills .sub-pill').forEach(el=>{ 
-    el.addEventListener('click', ()=>{ 
-      const newSub = el.getAttribute('data-sub'); 
-      subjectSelect.value = newSub; 
-      if(newSub === 'CPF') showCPFPopup();
-      showFound(student); 
-      document.getElementById('found-status')?.scrollIntoView?.(); 
-    }); 
-  }); 
-  foundArea.querySelectorAll('button[data-action]').forEach(btn=>{ 
-    btn.addEventListener('click', ()=>{ 
-      const action = btn.getAttribute('data-action'); 
-      markSubject(student, subject, action, date); 
-    }); 
-  }); 
-  document.getElementById('nextBtn').addEventListener('click', ()=> autoAdvanceToNext(student.enrollmentNumber)); 
-  document.getElementById('undoBtn').addEventListener('click', ()=> { 
-    const subj = subjectSelect.value || SUBJECTS[0]; 
-    clearSubjectMark(student, subj, date); 
-    showToast('Cleared mark (undo)'); 
-  }); 
-}
-
-/* ---------- Subject marking & clearing (require login to persist) ---------- */
-function ensureRecord(enrollmentNumber){ 
-  if(!attendanceRecords[enrollmentNumber]) attendanceRecords[enrollmentNumber] = { dates: {} }; 
-  return attendanceRecords[enrollmentNumber]; 
-}
-function markSubject(student, subject, status, date){ 
-  const cur = getCurrent(); 
-  if(!cur){ showToast('Sign in to save attendance'); return; } 
-  const rec = ensureRecord(student.enrollmentNumber); 
-  if(!rec.dates[date]) rec.dates[date] = {}; 
-  const timeStr = new Date().toLocaleTimeString(); 
-  rec.dates[date][subject] = { status, timestamp: status === 'absent' ? 'Not marked' : timeStr }; 
-  recentAttendance.unshift({ 
-    id: Date.now().toString(), 
-    studentName: student.name, 
-    enrollmentNumber: student.enrollmentNumber, 
-    class: student.class, 
-    status, 
-    subject, 
-    date, 
-    timestamp: rec.dates[date][subject].timestamp 
-  }); 
-  recentAttendance = recentAttendance.slice(0, 500); 
-  renderRecent(); 
-  renderMasterList(); 
-  showToast(`Marked ${student.name} — ${subject} on ${date}: ${status}`); 
-  saveStateForCurrent(); 
-  autoAdvanceToNext(student.enrollmentNumber); 
-}
-function clearSubjectMark(student, subject, date){ 
-  const cur = getCurrent(); 
-  if(!cur){ showToast('Sign in to clear attendance'); return; } 
-  const rec = attendanceRecords[student.enrollmentNumber]; 
-  if(rec && rec.dates && rec.dates[date] && rec.dates[date][subject]){ 
-    delete rec.dates[date][subject]; 
-    if(Object.keys(rec.dates[date]).length === 0) delete rec.dates[date]; 
-  } 
-  recentAttendance = recentAttendance.filter(r => !(r.enrollmentNumber === student.enrollmentNumber && r.subject === subject && r.date === date)); 
-  renderRecent(); 
-  renderMasterList(); 
-  saveStateForCurrent(); 
-}
-
-/* ---------- Edit popup ---------- */
-let activePopup = null; 
-function openEditPopup(enrollmentNumber, anchorEl, subjectDefault, dateDefault){ 
-  const cur = getCurrent(); 
-  if(!cur){ showToast('Sign in to edit marks'); return; } 
-  closeEditPopup(); 
-  const rect = anchorEl.getBoundingClientRect(); 
-  const popup = document.createElement('div'); 
-  popup.className='edit-pop'; 
-  popup.style.position='absolute'; 
-  popup.style.background='rgba(0,0,0,0.9)'; 
-  popup.style.color='#fff'; 
-  popup.style.padding='8px'; 
-  popup.style.borderRadius='8px'; 
-  popup.style.top = (rect.bottom + window.scrollY + 8) + 'px'; 
-  popup.style.left = (rect.left + window.scrollX) + 'px'; 
-  const subjOptions = SUBJECTS.map(s => `<option value="${s}" ${s===subjectDefault?'selected':''}>${s}</option>`).join(''); 
-  popup.innerHTML = ` 
-    <div style="display:flex;flex-direction:column;gap:8px"> 
+let activePopup = null;
+function openEditPopup(enrollmentNumber, anchorEl, subjectDefault, dateDefault) {
+  if (!getCurrent()) return showToast('Please sign in');
+  if (activePopup) activePopup.remove();
+  const rect = anchorEl.getBoundingClientRect();
+  const popup = document.createElement('div');
+  popup.style.position = 'absolute';
+  popup.style.background = 'var(--card-bg)';
+  popup.style.padding = '12px';
+  popup.style.borderRadius = '10px';
+  popup.style.border = '1px solid var(--border)';
+  popup.style.top = `${rect.bottom + window.scrollY + 8}px`;
+  popup.style.left = `${rect.left + window.scrollX}px`;
+  popup.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  popup.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
       <label>Date: <input id="popupDate" type="date" value="${dateDefault || formatDate(new Date())}"></label>
-      <label>Subject: <select id="popupSub">${subjOptions}</select></label> 
-      <label>Status: <select id="popupStatus"><option value="present">present</option><option value="late">late</option><option value="absent">absent</option></select></label> 
-      <div style="display:flex;gap:8px"><button id="popupSave" class="btn-ok">Save</button><button id="popupCancel" class="btn-ghost">Cancel</button></div> 
-    </div> 
-  `; 
-  document.body.appendChild(popup); 
-  activePopup = popup; 
-  window.addEventListener('click', popupOutsideClick); 
-  document.getElementById('popupCancel').addEventListener('click', ()=> closeEditPopup()); 
-  document.getElementById('popupSave').addEventListener('click', ()=>{ 
+      <label>Subject: <select id="popupSub">${SUBJECTS.map(s => `<option value="${s}" ${s===subjectDefault?'selected':''}>${s}</option>`).join('')}</select></label>
+      <label>Status: <select id="popupStatus"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option></select></label>
+      <div style="display:flex;gap:10px">
+        <button id="popupSave" class="btn-ok">Save</button>
+        <button id="popupCancel" class="btn-ghost">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(popup);
+  activePopup = popup;
+  window.addEventListener('click', e => { if (activePopup && !activePopup.contains(e.target)) activePopup.remove(); activePopup = null; });
+  document.getElementById('popupCancel').addEventListener('click', () => { activePopup.remove(); activePopup = null; });
+  document.getElementById('popupSave').addEventListener('click', () => {
     const date = document.getElementById('popupDate').value;
-    const sub = document.getElementById('popupSub').value; 
-    const status = document.getElementById('popupStatus').value; 
-    const rec = ensureRecord(enrollmentNumber); 
-    if(!rec.dates[date]) rec.dates[date] = {}; 
-    rec.dates[date][sub] = { status, timestamp: status === 'absent' ? 'Not marked' : new Date().toLocaleTimeString() }; 
-    for(let i=0;i<recentAttendance.length;i++){ 
-      if(recentAttendance[i].enrollmentNumber === enrollmentNumber && recentAttendance[i].subject === sub && recentAttendance[i].date === date){ 
-        recentAttendance[i].status = status; 
-        recentAttendance[i].timestamp = rec.dates[date][sub].timestamp; 
-        break; 
-      } 
-    } 
-    renderRecent(); 
-    renderMasterList(); 
-    saveStateForCurrent(); 
-    closeEditPopup(); 
-    showToast('Saved edit'); 
-  }); 
-}
-function popupOutsideClick(e){ if(activePopup && !activePopup.contains(e.target)) closeEditPopup(); } 
-function closeEditPopup(){ if(activePopup){ activePopup.remove(); activePopup = null; window.removeEventListener('click', popupOutsideClick); } }
-
-/* ---------- Auto-advance ---------- */
-function autoAdvanceToNext(currentEnrollment){ 
-  const date = dateSelect.value;
-  const subject = subjectSelect.value || SUBJECTS[0]; 
-  const idx = realStudents.findIndex(s=>s.enrollmentNumber===currentEnrollment); 
-  let found = null; 
-  for(let i=idx+1;i<realStudents.length;i++){ 
-    const s = realStudents[i]; 
-    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} }; 
-    if(!rec.dates[date] || !rec.dates[date][subject]){ 
-      found = s; 
-      break; 
-    } 
-  } 
-  if(!found){ 
-    foundArea.innerHTML = `<div class="muted">All students processed for subject ${subject} on ${date}.</div>`; 
-  } else { 
-    showFound(found); 
-    searchInput.value = found.enrollmentNumber; 
-  } 
+    const sub = document.getElementById('popupSub').value;
+    const status = document.getElementById('popupStatus').value;
+    const rec = ensureRecord(enrollmentNumber);
+    if (!rec.dates[date]) rec.dates[date] = {};
+    rec.dates[date][sub] = { status, timestamp: new Date().toLocaleTimeString() };
+    recentAttendance[sub] = recentAttendance[sub].filter(r => r.enrollmentNumber !== enrollmentNumber || r.date !== date);
+    recentAttendance[sub].unshift({ id: Date.now().toString(), studentName: realStudents.find(s => s.enrollmentNumber === enrollmentNumber).name, enrollmentNumber, status, subject: sub, date, timestamp: rec.dates[date][sub].timestamp });
+    renderRecent();
+    renderMasterList();
+    saveStateForCurrent();
+    showToast('Edit saved');
+    activePopup.remove();
+    activePopup = null;
+  });
 }
 
-/* ---------- Printable / PDF export ---------- */
-function buildPrintableHTML(){ 
+function autoAdvanceToNext(currentEnrollment) {
   const date = dateSelect.value;
-  const rows = realStudents.map(s=>{ 
-    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} }; 
-    const cells = SUBJECTS.map(sub => (rec.dates[date] && rec.dates[date][sub] ? rec.dates[date][sub].status : '—')); 
-    return `<tr><td>${escapeHtml(s.enrollmentNumber)}</td><td>${escapeHtml(s.name)}</td>${cells.map(c=>`<td>${escapeHtml(c)}</td>`).join('')}</tr>`; 
-  }).join(''); 
-  const headerCells = SUBJECTS.map(s=>`<th>${escapeHtml(s)}</th>`).join(''); 
-  const html = ` 
-    <div> 
-      <h2>Attendance — CO11 — ${date}</h2> 
-      <table> 
-        <thead><tr><th>Enrollment</th><th>Name</th>${headerCells}</tr></thead> 
-        <tbody>${rows}</tbody> 
-      </table> 
-    </div> 
-  `; 
-  return html; 
-}
-async function downloadPDF(filename = `attendance_co11_subjectwise_${formatDate(new Date())}.pdf`){ 
-  printArea.innerHTML = buildPrintableHTML(); 
-  printArea.style.color = '#111'; 
-  printArea.style.background = '#fff'; 
-  await new Promise(r=>setTimeout(r, 80)); 
-  await new Promise(r => setTimeout(r, 120)); 
-  const canvas = await html2canvas(printArea, { scale: 2 }); 
-  const imgData = canvas.toDataURL('image/png'); 
-  const { jsPDF } = window.jspdf; 
-  const pdf = new jsPDF({ unit: 'pt', format: 'a4' }); 
-  const pageWidth = pdf.internal.pageSize.getWidth(); 
-  const pageHeight = pdf.internal.pageSize.getHeight(); 
-  const img = new Image(); 
-  img.src = imgData; 
-  await new Promise(res => img.onload = res); 
-  const ratio = Math.min(pageWidth / img.width, pageHeight / img.height); 
-  const drawW = img.width * ratio; 
-  const drawH = img.height * ratio; 
-  pdf.addImage(imgData, 'PNG', (pageWidth - drawW)/2, 20, drawW, drawH); 
-  pdf.save(filename); 
-  showToast('PDF downloaded'); 
-  return filename; 
+  const subject = subjectSelect.value;
+  const idx = realStudents.findIndex(s => s.enrollmentNumber === currentEnrollment);
+  const next = realStudents.slice(idx + 1).find(s => !attendanceRecords[s.enrollmentNumber]?.dates[date]?.[subject]);
+  if (!next) {
+    foundArea.innerHTML = `<div class="muted">All students marked for ${subject} on ${date}.</div>`;
+    return;
+  }
+  showFound(next);
+  searchInput.value = next.enrollmentNumber;
 }
 
-/* ---------- Snapshot & CSV ---------- */
-function buildAttendanceSnapshot(){ 
+function buildPrintableHTML() {
   const date = dateSelect.value;
-  return realStudents.map(s=>{ 
-    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} }; 
-    const subjObj = {}; 
-    SUBJECTS.forEach(sub => subjObj[sub] = rec.dates[date] && rec.dates[date][sub] ? rec.dates[date][sub].status : '—'); 
-    return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, total: s.total || '', ...subjObj }; 
-  }); 
+  const rows = realStudents.map(s => {
+    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+    const cells = SUBJECTS.map(sub => rec.dates[date]?.[sub]?.status || '—');
+    return `<tr><td>${escapeHtml(s.enrollmentNumber)}</td><td>${escapeHtml(s.name)}</td>${cells.map(c => `<td>${capitalize(escapeHtml(c))}</td>`).join('')}</tr>`;
+  }).join('');
+  return `
+    <div>
+      <h2>CO11 Attendance - ${date}</h2>
+      <table>
+        <thead><tr><th>Enrollment</th><th>Name</th>${SUBJECTS.map(s => `<th>${s}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
-function toCSV(rows){ 
-  const date = dateSelect.value;
-  const header = ['EnrollmentNumber','Name','Class','TotalPresence', ...SUBJECTS]; 
-  const csv = [header.join(',')].concat(rows.map(r=>{ 
-    function q(v){ if(v==null) return ''; return '"'+String(v).replace(/"/g,'""')+'"'; } 
-    return [q(r.enrollmentNumber), q(r.name), q(r.class), q(r.total)].concat(SUBJECTS.map(s=>q(r[s]))).join(','); 
-  })); 
-  return csv.join('\n'); 
-}
-function downloadCSV(filename=`attendance_co11_subjectwise_${formatDate(new Date())}.csv`){ 
-  const rows = buildAttendanceSnapshot(); 
-  const csv = toCSV(rows); 
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'}); 
-  const url = URL.createObjectURL(blob); 
-  const a = document.createElement('a'); 
-  a.href = url; 
-  a.download = filename; 
-  document.body.appendChild(a); 
-  a.click(); 
-  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 5000); 
-  showToast('CSV downloaded'); 
+async function downloadPDF() {
+  printArea.innerHTML = buildPrintableHTML();
+  await new Promise(r => setTimeout(r, 100));
+  const canvas = await html2canvas(printArea, { scale: 2 });
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p', 'pt', 'a4');
+  const width = pdf.internal.pageSize.getWidth();
+  const height = pdf.internal.pageSize.getHeight() * (canvas.height / canvas.width);
+  pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+  const filename = `co11_attendance_${dateSelect.value}.pdf`;
+  pdf.save(filename);
+  showToast('PDF downloaded');
+  return filename;
 }
 
-/* ---------- Mail helper for counts ---------- */
-function summarizeCountsForSubject(subject, date){ 
-  let present=0, absent=0, late=0, notMarked=0; 
-  realStudents.forEach(s => { 
-    const rec = attendanceRecords[s.enrollmentNumber]; 
-    const v = rec && rec.dates && rec.dates[date] && rec.dates[date][subject] ? rec.dates[date][subject].status : null; 
-    if(v === 'present') present++; 
-    else if(v === 'absent') absent++; 
-    else if(v === 'late') late++; 
-    else notMarked++; 
-  }); 
-  return {present, absent, late, notMarked}; 
-}
-function openMailToDean(filename){ 
-  const dean = (deanEmailInput.value || '').trim() || 'aryan545@icloud.com'; 
-  const subject = subjectSelect.value || SUBJECTS[0]; 
+function buildAttendanceSnapshot() {
   const date = dateSelect.value;
-  const counts = summarizeCountsForSubject(subject, date); 
-  const subjectLine = encodeURIComponent(`Final Attendance — CO11 — ${subject} — ${date} (R.C Technical Institute)`); 
-  const bodyLines = [ 
-    `Dear Dean,`, 
-    ``, 
-    `Attendance summary for class CO11 — subject: ${subject} on ${date}:`, 
-    `Present: ${counts.present}`, 
-    `Late: ${counts.late}`, 
-    `Absent: ${counts.absent}`, 
-    `Not marked: ${counts.notMarked}`, 
-    ``, 
-    `I have generated the full attendance PDF — please attach it if you need a separate file.`, 
-    `Filename: ${filename}`, 
-    ``, 
-    `Regards,`, 
-    `Instructor` 
-  ]; 
-  const body = encodeURIComponent(bodyLines.join('\n')); 
-  window.location.href = `mailto:${encodeURIComponent(dean)}?subject=${subjectLine}&body=${body}`; 
+  return realStudents.map(s => {
+    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+    const subjObj = {};
+    SUBJECTS.forEach(sub => subjObj[sub] = rec.dates[date]?.[sub]?.status || '—');
+    return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, ...subjObj };
+  });
+}
+function toCSV(rows) {
+  const header = ['Enrollment', 'Name', 'Class', ...SUBJECTS];
+  return [header.join(',')].concat(rows.map(r => {
+    const q = v => `"${String(v).replace(/"/g, '""')}"`;
+    return [q(r.enrollmentNumber), q(r.name), q(r.class), ...SUBJECTS.map(s => q(r[s]))].join(',');
+  })).join('\n');
+}
+function downloadCSV() {
+  const rows = buildAttendanceSnapshot();
+  const csv = toCSV(rows);
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `co11_attendance_${dateSelect.value}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV downloaded');
 }
 
-/* ---------- Events & Init ---------- */
-btnAuthAction.addEventListener('click', async ()=>{ 
-  const u = (auUsername.value||'').trim(); 
-  const p = (auPassword.value||'').trim(); 
-  if(!u || !p){ showToast('Enter username & password'); return; } 
-  try{ 
-    await loginAccount(u,p); 
-    showToast('Logged in — loading account'); 
-    onAuthChanged(); 
-  }catch(e){ 
-    const msg = String(e && e.message ? e.message : e); 
-    if(msg.toLowerCase().includes('user not found')){ 
-      try{ 
-        await createAccount(u,'',p); 
-        await loginAccount(u,p); 
-        showToast('Account created & logged in'); 
-        onAuthChanged(); 
-      }catch(err){ showToast(err.message); } 
-    } else { showToast(e.message || 'Auth error'); } 
-  } 
+function openMailToDean(filename) {
+  const dean = deanEmailInput.value.trim() || 'dean@example.com';
+  const subject = subjectSelect.value;
+  const date = dateSelect.value;
+  const counts = summarizeCountsForSubject(subject, date);
+  const subjectLine = encodeURIComponent(`CO11 Attendance - ${subject} - ${date}`);
+  const body = encodeURIComponent(`Dear Dean,\n\nSummary for ${subject} on ${date}:\nPresent: ${counts.present}\nLate: ${counts.late}\nAbsent: ${counts.absent}\nUnmarked: ${counts.notMarked}\n\nAttached: ${filename}\n\nRegards,\nInstructor`);
+  window.location.href = `mailto:${dean}?subject=${subjectLine}&body=${body}`;
+}
+function summarizeCountsForSubject(subject, date) {
+  let present = 0, absent = 0, late = 0, notMarked = 0;
+  realStudents.forEach(s => {
+    const status = attendanceRecords[s.enrollmentNumber]?.dates[date]?.[subject]?.status;
+    if (status === 'present') present++;
+    else if (status === 'absent') absent++;
+    else if (status === 'late') late++;
+    else notMarked++;
+  });
+  return { present, absent, late, notMarked };
+}
+
+btnAuthAction.addEventListener('click', async () => {
+  const u = auUsername.value.trim();
+  const p = auPassword.value.trim();
+  if (!u || !p) return showToast('Enter username & password');
+  try {
+    await loginAccount(u, p);
+    showToast('Logged in');
+    onAuthChanged();
+  } catch (e) {
+    if (e.message.includes('not found')) {
+      try {
+        await createAccount(u, p);
+        await loginAccount(u, p);
+        showToast('Account created');
+        onAuthChanged();
+      } catch (err) { showToast(err.message); }
+    } else showToast(e.message);
+  }
 });
-
-btnLogoutTop.addEventListener('click', ()=>{ logout(); showToast('Logged out'); });
-
-function onAuthChanged(){ 
-  const cur = getCurrent(); 
-  if(!cur){ 
-    loggedInfo.textContent = 'Not signed in'; 
-    btnLogoutTop.style.display='none'; 
-    attendanceRecords = {}; 
-    recentAttendance = []; 
-    renderMasterList(); 
-    renderRecent(); 
-    return; 
-  } 
-  loggedInfo.textContent = 'Signed in: ' + cur.username; 
-  btnLogoutTop.style.display='inline-block'; 
-  loadStateForCurrent(); 
-  renderMasterList(); 
-  renderRecent(); 
+btnLogoutTop.addEventListener('click', () => { logout(); showToast('Logged out'); });
+function onAuthChanged() {
+  const cur = getCurrent();
+  loggedInfo.textContent = cur ? cur.username : 'Not signed in';
+  btnLogoutTop.style.display = cur ? 'inline-block' : 'none';
+  if (cur) loadStateForCurrent();
+  else {
+    attendanceRecords = {};
+    recentAttendance = SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+  }
+  renderMasterList();
+  renderRecent();
 }
-
 onAuthChanged();
 
-searchBtn.addEventListener('click', ()=>{ 
-  const q = (searchInput.value||'').trim(); 
-  if(!q){ showToast('Type enrollment number or name'); return; } 
-  const st = findStudent(q); 
-  if(!st){ showToast('Student not found'); return; } 
-  showFound(st); 
+searchBtn.addEventListener('click', () => {
+  const q = searchInput.value.trim();
+  if (!q) return showToast('Enter enrollment or name');
+  const student = findStudent(q);
+  if (!student) return showToast('Student not found');
+  showFound(student);
 });
-searchInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ searchBtn.click(); } });
-
-finalizeBtn.addEventListener('click', async ()=>{ 
-  try{ 
-    const filename = await downloadPDF(); 
-    showToast('PDF generated — opening mail client'); 
-    setTimeout(() => openMailToDean(filename), 1000); 
-  }catch(e){ 
-    console.error(e); 
-    showToast('Error generating PDF'); 
-  } 
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') searchBtn.click(); });
+downloadPdfBtn.addEventListener('click', downloadPDF);
+finalizeBtn.addEventListener('click', async () => {
+  const filename = await downloadPDF();
+  setTimeout(() => openMailToDean(filename), 500);
 });
-downloadPdfBtn.addEventListener('click', ()=> downloadPDF());
+document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); downloadCSV(); } });
 
-document.addEventListener('keydown', (e)=>{ 
-  if(e.ctrlKey && e.shiftKey && e.key.toLowerCase()==='c'){ downloadCSV(); } 
-});
-
-document.getElementById('masterContainer').addEventListener('scroll', ()=>{ closeEditPopup(); closeCPFPopup(); }); 
-window.addEventListener('resize', () => { closeEditPopup(); closeCPFPopup(); });
-
-function clearMasterHighlights(){ document.querySelectorAll('.master-highlight').forEach(el=>el.classList.remove('master-highlight')); }
-
-/* ---------- Toast ---------- */
-let toastTimer = null; 
-function showToast(msg){ 
-  const ex = document.querySelector('.toast'); 
-  if(ex) ex.remove(); 
-  const t = document.createElement('div'); 
-  t.className='toast'; 
-  t.textContent = msg; 
-  document.body.appendChild(t); 
-  if(toastTimer) clearTimeout(toastTimer); 
-  toastTimer = setTimeout(()=>{ t.remove(); toastTimer=null; }, 2500); 
+function showToast(msg) {
+  const ex = document.querySelector('.toast');
+  if (ex) ex.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
 }
 
+// Initial render to ensure student list appears
+renderMasterList();
 </script>
 </body>
 </html>
