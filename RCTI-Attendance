@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -45,6 +6,7 @@
 <title>R.C Technical Institute — CO11 Attendance</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
 :root {
   --bg: #0d1b2a;
@@ -90,12 +52,13 @@ button:hover { background: rgba(0,255,153,0.1); transform: translateY(-2px); }
 .btn-warn { border-color: rgba(255,209,102,0.2); color: var(--amber); }
 .btn-bad { border-color: rgba(239,71,111,0.2); color: var(--red); }
 .btn-ghost { border-style: dashed; }
-input[type="text"], input[type="date"], select { padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: rgba(0,255,153,0.03); color: var(--text); }
+input[type="text"], input[type="date"], input[type="email"], select { padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: rgba(0,255,153,0.03); color: var(--text); }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 
 .master-container { max-height: 700px; overflow-y: auto; padding: 6px; border-radius: 10px; border: 1px solid var(--border); }
 .master-item { display: flex; justify-content: space-between; gap: 10px; padding: 10px; border-radius: 10px; cursor: pointer; }
 .master-item:hover { background: rgba(0,255,153,0.05); }
+.master-item.selected { background: rgba(0,255,153,0.15); border-left: 3px solid var(--accent); }
 .master-left { display: flex; gap: 10px; align-items: center; }
 .master-status { font-size: 13px; color: var(--muted); min-width: 120px; text-align: right; }
 
@@ -109,9 +72,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .particle { position: absolute; font-size: 20px; opacity: 0.15; color: var(--accent); animation: float 12s infinite linear; }
 @keyframes float { 0% { transform: translateY(100vh) rotate(0deg); } 100% { transform: translateY(-100vh) rotate(360deg); } }
 
-#printArea { position: fixed; left: -9999px; top: -9999px; width: 794px; background: white; color: #111; padding: 16px; }
-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-table th, table td { padding: 6px; border: 1px solid #ddd; }
+#printArea { position: fixed; left: -9999px; top: -9999px; width: 1123px; background: white; color: #111; padding: 16px; }
+#printArea table { width: 100%; border-collapse: collapse; font-size: 8px; }
+#printArea table th, #printArea table td { padding: 4px; border: 1px solid #ddd; word-wrap: break-word; }
 .toast { position: fixed; right: 20px; bottom: 20px; background: rgba(20,33,61,0.9); padding: 10px 14px; border-radius: 10px; color: var(--accent); font-weight: 600; animation: fadeIn 0.5s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 .auth-card { display: flex; gap: 12px; align-items: center; }
@@ -132,8 +95,10 @@ table th, table td { padding: 6px; border: 1px solid #ddd; }
 </div>
 <div class="auth-card">
 <input id="auUsername" class="input-small" placeholder="username" autocomplete="username" />
+<input id="auEmail" class="input-small" placeholder="email (required for signup)" type="email" />
 <input id="auPassword" class="input-small" placeholder="password" type="password" autocomplete="current-password" />
 <button id="btnAuthAction" class="btn-primary">Login / Signup</button>
+<button id="btnForgot" class="btn-ghost">Forgot?</button>
 </div>
 <div style="display:flex;gap:12px;align-items:center">
 <div id="loggedInfo" class="user-badge">Not signed in</div>
@@ -155,6 +120,11 @@ table th, table td { padding: 6px; border: 1px solid #ddd; }
 <input id="searchInput" type="text" placeholder="Enrollment or name..." style="flex:1" />
 <button id="searchBtn" class="btn-primary">Search</button>
 </div>
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+<label>From: <input id="fromDate" type="date" style="width:140px"/></label>
+<label>To: <input id="toDate" type="date" style="width:140px"/></label>
+<button id="clearRangeBtn" class="btn-ghost" style="padding:4px 8px;">Clear</button>
+</div>
 <div id="foundArea"><div class="muted">Select date, subject, and search to start.</div></div>
 <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
 <input id="deanEmail" type="text" placeholder="Dean email" style="flex:1" />
@@ -165,8 +135,12 @@ table th, table td { padding: 6px; border: 1px solid #ddd; }
 </div>
 <div>
 <div class="card">
-<div class="card-header"><div class="title">📋 Students</div><div class="muted">Click to mark</div></div>
+<div class="card-header"><div class="title">📋 Students</div><div class="muted">Click to mark, double-click for details</div></div>
 <div class="master-container" id="masterContainer"><div id="masterList"></div></div>
+</div>
+<div class="card">
+<div class="card-header"><div class="title">📉 Low Attendance (<70%)</div><button id="lowRefresh" class="btn-ghost">Refresh</button></div>
+<div id="lowList" style="max-height:300px;overflow-y:auto"></div>
 </div>
 </div>
 </div>
@@ -267,54 +241,175 @@ const realStudents = [
 ];
 let attendanceRecords = {};
 let recentAttendance = SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+let lectureDates = SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+let currentSelectedEnrollment = null;
 
 const USERS_KEY = 'rc_users_v1';
 const CURRENT_KEY = 'rc_current_user_v1';
+const DB_NAME = 'rc_attendance_db';
+const DB_VERSION = 4; // Incremented to ensure clean schema
+let db;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      db = request.result;
+      resolve(db);
+    };
+    request.onupgradeneeded = (e) => {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains('accountData')) {
+        const store = db.createObjectStore('accountData', { keyPath: 'username' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('attendanceRecords')) {
+        const store = db.createObjectStore('attendanceRecords', { keyPath: 'id' });
+        store.createIndex('username', 'username', { unique: false });
+        store.createIndex('date', 'date', { unique: false });
+        store.createIndex('enrollmentNumber', 'enrollmentNumber', { unique: false });
+      }
+    };
+  });
+}
+
+async function saveAccountData(username, payload) {
+  if (!db) await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['accountData'], 'readwrite');
+    const store = tx.objectStore('accountData');
+    const request = store.put({ username, ...payload });
+    request.onsuccess = resolve;
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveAttendanceRecord(username, record) {
+  if (!db) await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['attendanceRecords'], 'readwrite');
+    const store = tx.objectStore('attendanceRecords');
+    const request = store.put({ id: `${username}_${record.enrollmentNumber}_${record.date}_${record.subject}`, username, ...record });
+    request.onsuccess = resolve;
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadAccountData(username) {
+  if (!db) await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['accountData'], 'readonly');
+    const store = tx.objectStore('accountData');
+    const request = store.get(username);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadAttendanceRecords(username) {
+  if (!db) await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['attendanceRecords'], 'readonly');
+    const store = tx.objectStore('attendanceRecords');
+    const index = store.index('username');
+    const request = index.getAll(username);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadStateForCurrent() {
+  const cur = getCurrent();
+  if (!cur) return;
+  try {
+    const parsed = await loadAccountData(cur.username);
+    if (parsed) {
+      attendanceRecords = parsed.attendanceRecords || {};
+      lectureDates = parsed.lectureDates || SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+    }
+    const records = await loadAttendanceRecords(cur.username);
+    recentAttendance = SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+    records.forEach(rec => {
+      const student = realStudents.find(s => s.enrollmentNumber === rec.enrollmentNumber);
+      if (!student) return;
+      recentAttendance[rec.subject].push({
+        id: rec.id,
+        studentName: student.name,
+        enrollmentNumber: rec.enrollmentNumber,
+        status: rec.status,
+        subject: rec.subject,
+        date: rec.date,
+        timestamp: rec.timestamp
+      });
+      if (!attendanceRecords[rec.enrollmentNumber]) {
+        attendanceRecords[rec.enrollmentNumber] = { dates: {} };
+      }
+      if (!attendanceRecords[rec.enrollmentNumber].dates[rec.date]) {
+        attendanceRecords[rec.enrollmentNumber].dates[rec.date] = {};
+      }
+      attendanceRecords[rec.enrollmentNumber].dates[rec.date][rec.subject] = {
+        status: rec.status,
+        timestamp: rec.timestamp
+      };
+      if (!lectureDates[rec.subject].includes(rec.date)) {
+        lectureDates[rec.subject].push(rec.date);
+      }
+    });
+    renderMasterList();
+    renderRecent();
+    renderLow();
+  } catch (error) {
+    showToast('Error loading data: ' + error.message);
+  }
+}
+
 function readJSON(key) { try { return JSON.parse(localStorage.getItem(key)); } catch(e) { return null; } }
 function writeJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 function getUsers() { return readJSON(USERS_KEY) || {}; }
 function setUsers(o) { writeJSON(USERS_KEY, o); }
-async function hashString(str) {
-  const enc = new TextEncoder().encode(str);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+function hashString(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for(let i = 0, ch; i < str.length; i++) {
+      ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1  = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2  = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
-async function createAccount(username, password) {
+function createAccount(username, password, email) {
   username = username.trim().toLowerCase();
   if (!username || password.length < 3) throw new Error('Invalid username or password');
+  if (email && !email.includes('@')) throw new Error('Invalid email');
   const users = getUsers();
   if (users[username]) throw new Error('Username taken');
-  users[username] = { pwdHash: await hashString(password), created: new Date().toISOString() };
+  users[username] = { pwdHash: hashString(password), email: email ? email.toLowerCase() : '', created: new Date().toISOString() };
   setUsers(users);
   return users[username];
 }
-async function loginAccount(username, password) {
+function loginAccount(username, password) {
   username = username.trim().toLowerCase();
   const users = getUsers();
   const u = users[username];
   if (!u) throw new Error('User not found');
-  if (await hashString(password) !== u.pwdHash) throw new Error('Invalid password');
+  if (hashString(password) !== u.pwdHash) throw new Error('Invalid password');
   writeJSON(CURRENT_KEY, { username, loggedAt: new Date().toISOString() });
   return { username };
 }
 function logout() { localStorage.removeItem(CURRENT_KEY); onAuthChanged(); }
 function getCurrent() { return readJSON(CURRENT_KEY); }
-function dataKeyFor(username) { return `rc_account_data_v1::${username}`; }
-function saveAccountData(username, payload) { writeJSON(dataKeyFor(username), payload); }
-function loadAccountData(username) { return readJSON(dataKeyFor(username)); }
 
 function saveStateForCurrent() {
   const cur = getCurrent();
   if (!cur) return;
-  saveAccountData(cur.username, { attendanceRecords, recentAttendance, timestamp: new Date().toISOString() });
-}
-function loadStateForCurrent() {
-  const cur = getCurrent();
-  if (!cur) return;
-  const parsed = loadAccountData(cur.username);
-  if (parsed) {
-    attendanceRecords = parsed.attendanceRecords || {};
-    recentAttendance = parsed.recentAttendance || SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+  try {
+    saveAccountData(cur.username, { attendanceRecords, lectureDates, timestamp: new Date().toISOString() });
+  } catch (error) {
+    showToast('Error saving data: ' + error.message);
   }
 }
 
@@ -330,18 +425,26 @@ const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 const deanEmailInput = document.getElementById('deanEmail');
 const printArea = document.getElementById('printArea');
 const auUsername = document.getElementById('auUsername');
+const auEmail = document.getElementById('auEmail');
 const auPassword = document.getElementById('auPassword');
 const btnAuthAction = document.getElementById('btnAuthAction');
+const btnForgot = document.getElementById('btnForgot');
 const loggedInfo = document.getElementById('loggedInfo');
 const btnLogoutTop = document.getElementById('btnLogoutTop');
 const particles = document.getElementById('particles');
+const lowRefresh = document.getElementById('lowRefresh');
+const lowList = document.getElementById('lowList');
+const fromDate = document.getElementById('fromDate');
+const toDate = document.getElementById('toDate');
+const clearRangeBtn = document.getElementById('clearRangeBtn');
 
 function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
-function formatDate(date) { return date.toISOString().split('T')[0]; }
+function formatDate(date) { return new Date(date).toISOString().split('T')[0]; }
 
 function initDateAndSubjects() {
   dateSelect.value = formatDate(new Date());
+  subjectSelect.innerHTML = ''; // Clear existing options
   SUBJECTS.forEach(sub => {
     const opt = document.createElement('option');
     opt.value = sub;
@@ -356,13 +459,15 @@ function initDateAndSubjects() {
     updateBackgroundSymbols(subjectSelect.value);
   });
   dateSelect.addEventListener('change', () => {
-    const student = findStudent(searchInput.value.trim());
-    if (student) showFound(student);
+    searchInput.value = '';
+    currentSelectedEnrollment = null;
+    updateSelectedInList();
+    foundArea.innerHTML = '<div class="muted">Select date, subject, and search to start.</div>';
     renderRecent();
     renderMasterList();
   });
   updateBackgroundSymbols(SUBJECTS[0]);
-  renderMasterList(); // Ensure initial render
+  renderMasterList();
 }
 initDateAndSubjects();
 
@@ -390,8 +495,12 @@ function findStudent(q) {
 
 function renderRecent() {
   const subject = subjectSelect.value;
+  const date = dateSelect.value;
   recentList.innerHTML = '';
-  (recentAttendance[subject] || []).forEach(rec => {
+  const records = recentAttendance[subject] || [];
+  records.sort((a, b) => new Date(b.date) - new Date(a.date) || b.timestamp.localeCompare(a.timestamp));
+  const filteredRecords = date ? records.filter(r => r.date === date) : records;
+  filteredRecords.forEach(rec => {
     const row = document.createElement('div');
     row.className = 'rec-row';
     row.innerHTML = `
@@ -399,7 +508,7 @@ function renderRecent() {
         <div class="avatar">${(rec.studentName || '--').split(' ').slice(0,2).map(w=>w[0]).join('')}</div>
         <div>
           <div class="student-name">${escapeHtml(rec.studentName)}</div>
-          <div class="meta">${rec.enrollmentNumber} • ${rec.date}</div>
+          <div class="meta">${rec.enrollmentNumber} • ${rec.date} • ${rec.timestamp}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -413,6 +522,9 @@ function renderRecent() {
     });
     recentList.appendChild(row);
   });
+  if (!filteredRecords.length) {
+    recentList.innerHTML = `<div class="muted">No recent marks for ${subject}${date ? ` on ${date}` : ''}.</div>`;
+  }
 }
 
 function renderMasterList() {
@@ -426,7 +538,8 @@ function renderMasterList() {
   const subject = subjectSelect.value;
   realStudents.forEach(s => {
     const div = document.createElement('div');
-    div.className = 'master-item';
+    div.className = `master-item${s.enrollmentNumber === currentSelectedEnrollment ? ' selected' : ''}`;
+    div.setAttribute('data-enroll', s.enrollmentNumber);
     const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
     const status = rec.dates[date] && rec.dates[date][subject] ? rec.dates[date][subject].status : '—';
     div.innerHTML = `
@@ -439,11 +552,22 @@ function renderMasterList() {
       <div class="master-status">Status: ${capitalize(status)}</div>
     `;
     div.addEventListener('click', () => {
+      currentSelectedEnrollment = s.enrollmentNumber;
+      updateSelectedInList();
       showFound(s);
       searchInput.value = s.enrollmentNumber;
     });
+    div.addEventListener('dblclick', () => showStudentDetails(s));
     masterList.appendChild(div);
   });
+}
+
+function updateSelectedInList() {
+  masterList.querySelectorAll('.master-item').forEach(div => div.classList.remove('selected'));
+  if (currentSelectedEnrollment) {
+    const selectedDiv = masterList.querySelector(`[data-enroll="${currentSelectedEnrollment}"]`);
+    if (selectedDiv) selectedDiv.classList.add('selected');
+  }
 }
 
 function showFound(student) {
@@ -451,6 +575,8 @@ function showFound(student) {
     foundArea.innerHTML = '<div class="muted">Student not found.</div>';
     return;
   }
+  currentSelectedEnrollment = student.enrollmentNumber;
+  updateSelectedInList();
   const date = dateSelect.value;
   const subject = subjectSelect.value;
   const rec = attendanceRecords[student.enrollmentNumber] || { dates: {} };
@@ -492,45 +618,87 @@ function showFound(student) {
       markSubject(student, subject, btn.getAttribute('data-action'), date);
     });
   });
-  document.getElementById('undoBtn').addEventListener('click', () => clearSubjectMark(student, subject, date));
-  document.getElementById('nextBtn').addEventListener('click', () => autoAdvanceToNext(student.enrollmentNumber));
+  const undoBtn = foundArea.querySelector('#undoBtn');
+  if (undoBtn) undoBtn.addEventListener('click', () => clearSubjectMark(student, subject, date));
+  const nextBtn = foundArea.querySelector('#nextBtn');
+  if (nextBtn) nextBtn.addEventListener('click', () => autoAdvanceToNext(student.enrollmentNumber));
 }
 
 function ensureRecord(enrollmentNumber) {
-  if (!attendanceRecords[enrollmentNumber]) attendanceRecords[enrollmentNumber] = { dates: {} };
+  if (!attendanceRecords[enrollmentNumber]) {
+    attendanceRecords[enrollmentNumber] = { dates: {} };
+  }
   return attendanceRecords[enrollmentNumber];
 }
-function markSubject(student, subject, status, date) {
-  const rec = ensureRecord(student.enrollmentNumber);
-  if (!rec.dates[date]) rec.dates[date] = {};
-  rec.dates[date][subject] = { status, timestamp: new Date().toLocaleTimeString() };
-  recentAttendance[subject].unshift({
-    id: Date.now().toString(),
-    studentName: student.name,
-    enrollmentNumber: student.enrollmentNumber,
-    status,
-    subject,
-    date,
-    timestamp: rec.dates[date][subject].timestamp
-  });
-  recentAttendance[subject] = recentAttendance[subject].slice(0, 100);
-  renderRecent();
-  renderMasterList();
-  saveStateForCurrent();
-  showToast(`Marked ${status} for ${student.name}`);
-  autoAdvanceToNext(student.enrollmentNumber);
-}
-function clearSubjectMark(student, subject, date) {
-  const rec = attendanceRecords[student.enrollmentNumber];
-  if (rec && rec.dates[date] && rec.dates[date][subject]) {
-    delete rec.dates[date][subject];
-    if (!Object.keys(rec.dates[date]).length) delete rec.dates[date];
+
+async function markSubject(student, subject, status, date) {
+  const cur = getCurrent();
+  if (!cur) return showToast('Please sign in');
+  try {
+    const rec = ensureRecord(student.enrollmentNumber);
+    if (!rec.dates[date]) rec.dates[date] = {};
+    rec.dates[date][subject] = { status, timestamp: new Date().toLocaleTimeString() };
+    if (!lectureDates[subject].includes(date)) {
+      lectureDates[subject].push(date);
+      lectureDates[subject].sort();
+    }
+    const record = {
+      id: `${cur.username}_${student.enrollmentNumber}_${date}_${subject}`,
+      username: cur.username,
+      studentName: student.name,
+      enrollmentNumber: student.enrollmentNumber,
+      status,
+      subject,
+      date,
+      timestamp: rec.dates[date][subject].timestamp
+    };
+    recentAttendance[subject] = recentAttendance[subject].filter(r => r.id !== record.id);
+    recentAttendance[subject].unshift(record);
+    await saveAttendanceRecord(cur.username, record);
+    renderRecent();
+    renderMasterList();
+    renderLow();
+    saveStateForCurrent();
+    showToast(`Marked ${status} for ${student.name}`);
+    autoAdvanceToNext(student.enrollmentNumber);
+  } catch (error) {
+    showToast('Error marking attendance: ' + error.message);
   }
-  recentAttendance[subject] = recentAttendance[subject].filter(r => r.enrollmentNumber !== student.enrollmentNumber || r.date !== date);
-  renderRecent();
-  renderMasterList();
-  saveStateForCurrent();
-  showToast('Mark cleared');
+}
+
+async function clearSubjectMark(student, subject, date) {
+  const cur = getCurrent();
+  if (!cur) return showToast('Please sign in');
+  try {
+    const rec = attendanceRecords[student.enrollmentNumber];
+    if (rec && rec.dates[date] && rec.dates[date][subject]) {
+      delete rec.dates[date][subject];
+      if (!Object.keys(rec.dates[date]).length) delete rec.dates[date];
+    }
+    let hasAny = false;
+    Object.values(attendanceRecords).forEach(r => {
+      if (r.dates && r.dates[date] && r.dates[date][subject]) hasAny = true;
+    });
+    if (!hasAny) {
+      lectureDates[subject] = lectureDates[subject].filter(d => d !== date);
+    }
+    recentAttendance[subject] = recentAttendance[subject].filter(r => r.enrollmentNumber !== student.enrollmentNumber || r.date !== date);
+    if (!db) await openDB();
+    const tx = db.transaction(['attendanceRecords'], 'readwrite');
+    const store = tx.objectStore('attendanceRecords');
+    await new Promise((resolve, reject) => {
+      const request = store.delete(`${cur.username}_${student.enrollmentNumber}_${date}_${subject}`);
+      request.onsuccess = resolve;
+      request.onerror = () => reject(request.error);
+    });
+    renderRecent();
+    renderMasterList();
+    renderLow();
+    saveStateForCurrent();
+    showToast('Mark cleared');
+  } catch (error) {
+    showToast('Error clearing mark: ' + error.message);
+  }
 }
 
 let activePopup = null;
@@ -560,110 +728,356 @@ function openEditPopup(enrollmentNumber, anchorEl, subjectDefault, dateDefault) 
   `;
   document.body.appendChild(popup);
   activePopup = popup;
-  window.addEventListener('click', e => { if (activePopup && !activePopup.contains(e.target)) activePopup.remove(); activePopup = null; });
+  window.addEventListener('click', e => { if (activePopup && !activePopup.contains(e.target)) activePopup.remove(); activePopup = null; }, {once: true});
   document.getElementById('popupCancel').addEventListener('click', () => { activePopup.remove(); activePopup = null; });
-  document.getElementById('popupSave').addEventListener('click', () => {
-    const date = document.getElementById('popupDate').value;
-    const sub = document.getElementById('popupSub').value;
-    const status = document.getElementById('popupStatus').value;
-    const rec = ensureRecord(enrollmentNumber);
-    if (!rec.dates[date]) rec.dates[date] = {};
-    rec.dates[date][sub] = { status, timestamp: new Date().toLocaleTimeString() };
-    recentAttendance[sub] = recentAttendance[sub].filter(r => r.enrollmentNumber !== enrollmentNumber || r.date !== date);
-    recentAttendance[sub].unshift({ id: Date.now().toString(), studentName: realStudents.find(s => s.enrollmentNumber === enrollmentNumber).name, enrollmentNumber, status, subject: sub, date, timestamp: rec.dates[date][sub].timestamp });
-    renderRecent();
-    renderMasterList();
-    saveStateForCurrent();
-    showToast('Edit saved');
-    activePopup.remove();
-    activePopup = null;
+  document.getElementById('popupSave').addEventListener('click', async () => {
+    try {
+      const date = document.getElementById('popupDate').value;
+      const sub = document.getElementById('popupSub').value;
+      const status = document.getElementById('popupStatus').value;
+      const cur = getCurrent();
+      const student = realStudents.find(s => s.enrollmentNumber === enrollmentNumber);
+      const rec = ensureRecord(enrollmentNumber);
+      if (!rec.dates[date]) rec.dates[date] = {};
+      rec.dates[date][sub] = { status, timestamp: new Date().toLocaleTimeString() };
+      if (!lectureDates[sub].includes(date)) {
+        lectureDates[sub].push(date);
+        lectureDates[sub].sort();
+      }
+      recentAttendance[sub] = recentAttendance[sub].filter(r => r.enrollmentNumber !== enrollmentNumber || r.date !== date);
+      const record = {
+        id: `${cur.username}_${enrollmentNumber}_${date}_${sub}`,
+        username: cur.username,
+        studentName: student.name,
+        enrollmentNumber,
+        status,
+        subject: sub,
+        date,
+        timestamp: rec.dates[date][sub].timestamp
+      };
+      recentAttendance[sub].unshift(record);
+      await saveAttendanceRecord(cur.username, record);
+      renderRecent();
+      renderMasterList();
+      renderLow();
+      saveStateForCurrent();
+      showToast('Edit saved');
+      activePopup.remove();
+      activePopup = null;
+    } catch (error) {
+      showToast('Error saving edit: ' + error.message);
+    }
   });
 }
 
 function autoAdvanceToNext(currentEnrollment) {
   const date = dateSelect.value;
   const subject = subjectSelect.value;
-  const idx = realStudents.findIndex(s => s.enrollmentNumber === currentEnrollment);
-  const next = realStudents.slice(idx + 1).find(s => !attendanceRecords[s.enrollmentNumber]?.dates[date]?.[subject]);
-  if (!next) {
-    foundArea.innerHTML = `<div class="muted">All students marked for ${subject} on ${date}.</div>`;
+  const currentIdx = realStudents.findIndex(s => s.enrollmentNumber === currentEnrollment);
+  if (currentIdx === -1) {
+    showToast('Current student not found');
     return;
   }
+  // Search from next student to end
+  let next = realStudents.slice(currentIdx + 1).find(s => {
+    const rec = attendanceRecords[s.enrollmentNumber]?.dates[date]?.[subject];
+    return !rec;
+  });
+  // If not found, wrap around to start
+  if (!next) {
+    next = realStudents.find(s => {
+      const rec = attendanceRecords[s.enrollmentNumber]?.dates[date]?.[subject];
+      return !rec;
+    });
+  }
+  if (!next) {
+    foundArea.innerHTML = `<div class="muted">All students marked for ${subject} on ${date}.</div>`;
+    currentSelectedEnrollment = null;
+    updateSelectedInList();
+    showToast('All students marked');
+    return;
+  }
+  currentSelectedEnrollment = next.enrollmentNumber;
+  updateSelectedInList();
   showFound(next);
   searchInput.value = next.enrollmentNumber;
 }
 
-function buildPrintableHTML() {
-  const date = dateSelect.value;
-  const rows = realStudents.map(s => {
-    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
-    const cells = SUBJECTS.map(sub => rec.dates[date]?.[sub]?.status || '—');
-    return `<tr><td>${escapeHtml(s.enrollmentNumber)}</td><td>${escapeHtml(s.name)}</td>${cells.map(c => `<td>${capitalize(escapeHtml(c))}</td>`).join('')}</tr>`;
-  }).join('');
-  return `
-    <div>
-      <h2>CO11 Attendance - ${date}</h2>
-      <table>
-        <thead><tr><th>Enrollment</th><th>Name</th>${SUBJECTS.map(s => `<th>${s}</th>`).join('')}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
+function showStudentDetails(student) {
+  const modal = document.createElement('div');
+  modal.style = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10';
+  const content = document.createElement('div');
+  content.className = 'card';
+  content.style = 'max-width:800px;width:90%;max-height:90%;overflow:auto;';
+  content.innerHTML = `<div class="card-header"><div class="title">${escapeHtml(student.name)} - Attendance Details</div><button onclick="this.parentElement.parentElement.parentElement.remove()" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:20px;">&times;</button></div>`;
+  const allDates = SUBJECTS.reduce((o, s) => (o[s] = (lectureDates[s] || []).sort(), o), {});
+  const totalL = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].length, 0);
+  const rec = attendanceRecords[student.enrollmentNumber] || { dates: {} };
+  const totalP = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].filter(d => rec.dates[d]?.[sub]?.status === 'present').length, 0);
+  const overallPerc = totalL ? Math.round(totalP / totalL * 100) : 0;
+  let detailsHTML = `<div class="muted">Overall Attendance: ${overallPerc}% (${totalP}/${totalL} days)</div>`;
+  detailsHTML += '<div style="margin-top:10px;">';
+  const chartData = SUBJECTS.map(sub => {
+    const total = allDates[sub].length;
+    const present = allDates[sub].filter(d => rec.dates[d]?.[sub]?.status === 'present').length;
+    const perc = total ? Math.round(present / total * 100) : 0;
+    const absentDays = allDates[sub].filter(d => rec.dates[d]?.[sub]?.status !== 'present' && rec.dates[d]?.[sub]).sort().join(', ') || 'None';
+    detailsHTML += `<div><strong>${sub}:</strong> ${present}/${total} days (${perc}%)<br><span class="meta">Absent/Late Days: ${absentDays}</span></div>`;
+    return perc;
+  });
+  detailsHTML += '</div>';
+  content.innerHTML += detailsHTML;
+  content.innerHTML += '<canvas id="attChart" style="margin-top:10px;"></canvas>';
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  const ctx = document.getElementById('attChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: SUBJECTS,
+      datasets: [{
+        label: 'Attendance %',
+        data: chartData,
+        backgroundColor: 'rgba(0,255,153,0.5)',
+        borderColor: 'rgba(0,255,153,1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, title: { display: true, text: 'Attendance (%)' } }
+      },
+      plugins: { legend: { display: true } }
+    }
+  });
 }
+
+function renderLow() {
+  const from = fromDate.value || '1900-01-01';
+  const to = toDate.value || '2100-01-01';
+  const allDates = SUBJECTS.reduce((o, sub) => {
+    o[sub] = (lectureDates[sub] || []).filter(d => d >= from && d <= to).sort();
+    return o;
+  }, {});
+  const totalL = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].length, 0);
+  const studentsWithPerc = realStudents.map(s => {
+    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+    const totalP = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].filter(d => rec.dates[d]?.[sub]?.status === 'present').length, 0);
+    const perc = totalL ? Math.round(totalP / totalL * 100) : 0;
+    return { student: s, perc, totalP, totalL };
+  }).filter(sp => sp.perc < 70 && sp.totalL > 0).sort((a, b) => a.perc - b.perc);
+  lowList.innerHTML = '';
+  studentsWithPerc.forEach(sp => {
+    const div = document.createElement('div');
+    div.className = 'rec-row';
+    div.innerHTML = `
+      <div class="left">
+        <div class="avatar">${sp.student.name.split(' ').slice(0,2).map(w => w[0]).join('')}</div>
+        <div>
+          <div class="student-name">${escapeHtml(sp.student.name)}</div>
+          <div class="meta">${sp.student.enrollmentNumber} • ${sp.totalP}/${sp.totalL} days</div>
+        </div>
+      </div>
+      <div class="badge absent">${sp.perc}%</div>
+    `;
+    div.addEventListener('click', () => showStudentDetails(sp.student));
+    lowList.appendChild(div);
+  });
+  if (!studentsWithPerc.length) lowList.innerHTML = '<div class="muted">No students below 70%</div>';
+}
+
+function buildPrintableHTML() {
+  const from = fromDate.value;
+  const to = toDate.value;
+  let rows = '';
+  const sortedStudents = realStudents.slice().sort((a, b) => a.enrollmentNumber.localeCompare(b.enrollmentNumber));
+  if (from && to) {
+    const allDates = SUBJECTS.reduce((o, s) => (o[s] = (lectureDates[s] || []).filter(d => d >= from && d <= to).sort(), o), {});
+    rows = sortedStudents.map(s => {
+      const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+      const cells = SUBJECTS.map(sub => {
+        const total = allDates[sub].length;
+        const present = allDates[sub].filter(d => rec.dates[d]?.[sub]?.status === 'present').length;
+        const perc = total ? Math.round(present / total * 100) : 0;
+        return `${present}/${total} (${perc}%)`;
+      });
+      const totalL = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].length, 0);
+      const totalP = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].filter(d => rec.dates[d]?.[sub]?.status === 'present').length, 0);
+      const overallPerc = totalL ? Math.round(totalP / totalL * 100) : 0;
+      return `<tr><td style="width:80px">${escapeHtml(s.enrollmentNumber)}</td><td style="width:200px">${escapeHtml(s.name)}</td>${cells.map(c => `<td style="width:100px">${c}</td>`).join('')}<td style="width:80px">${overallPerc}%</td></tr>`;
+    }).join('');
+    return `
+      <div style="font-family:Arial;font-size:10px;">
+        <h2 style="font-size:14px;">CO11 Attendance Summary - ${from} to ${to}</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:8px;">
+          <thead><tr><th>Enrollment</th><th>Name</th>${SUBJECTS.map(s => `<th>${s}</th>`).join('')}<th>Overall</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    const date = dateSelect.value;
+    rows = sortedStudents.map(s => {
+      const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+      const cells = SUBJECTS.map(sub => rec.dates[date]?.[sub]?.status || '—');
+      return `<tr><td style="width:80px">${escapeHtml(s.enrollmentNumber)}</td><td style="width:200px">${escapeHtml(s.name)}</td>${cells.map(c => `<td style="width:100px">${capitalize(escapeHtml(c))}</td>`).join('')}</tr>`;
+    }).join('');
+    return `
+      <div style="font-family:Arial;font-size:10px;">
+        <h2 style="font-size:14px;">CO11 Attendance - ${date}</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:8px;">
+          <thead><tr><th>Enrollment</th><th>Name</th>${SUBJECTS.map(s => `<th>${s}</th>`).join('')}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+}
+
 async function downloadPDF() {
-  printArea.innerHTML = buildPrintableHTML();
-  await new Promise(r => setTimeout(r, 100));
-  const canvas = await html2canvas(printArea, { scale: 2 });
-  const imgData = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF('p', 'pt', 'a4');
-  const width = pdf.internal.pageSize.getWidth();
-  const height = pdf.internal.pageSize.getHeight() * (canvas.height / canvas.width);
-  pdf.addImage(imgData, 'PNG', 0, 0, width, height);
-  const filename = `co11_attendance_${dateSelect.value}.pdf`;
-  pdf.save(filename);
-  showToast('PDF downloaded');
-  return filename;
+  try {
+    printArea.innerHTML = buildPrintableHTML();
+    await new Promise(r => setTimeout(r, 100));
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('l', 'pt', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 20;
+    const table = printArea.querySelector('table');
+    const rows = table.querySelectorAll('tr');
+    const rowHeight = 20;
+    const maxRowsPerPage = Math.floor((pageHeight - margin * 2 - 30) / rowHeight); // 30 for header
+    let currentRow = 0;
+
+    while (currentRow < rows.length) {
+      const pageRows = rows.length - currentRow > maxRowsPerPage ? maxRowsPerPage : rows.length - currentRow;
+      const pageTable = document.createElement('table');
+      pageTable.style = 'width:100%;border-collapse:collapse;font-size:8px;';
+      pageTable.innerHTML = `
+        <thead>${table.querySelector('thead').innerHTML}</thead>
+        <tbody>${Array.from(rows).slice(currentRow, currentRow + pageRows).map(row => row.outerHTML).join('')}</tbody>
+      `;
+      printArea.innerHTML = `
+        <div style="font-family:Arial;font-size:10px;">
+          <h2 style="font-size:14px;">${printArea.querySelector('h2').textContent}</h2>
+          ${pageTable.outerHTML}
+        </div>
+      `;
+      const canvas = await html2canvas(printArea, { scale: 2, width: printArea.offsetWidth, height: printArea.offsetHeight });
+      const imgData = canvas.toDataURL('image/png');
+      const imgHeight = (canvas.height / canvas.width) * pageWidth;
+      pdf.addImage(imgData, 'PNG', margin, margin, pageWidth - 2 * margin, imgHeight);
+      currentRow += pageRows;
+      if (currentRow < rows.length) {
+        pdf.addPage();
+      }
+    }
+
+    const from = fromDate.value;
+    const to = toDate.value;
+    const filename = from && to ? `co11_attendance_summary_${from}_to_${to}.pdf` : `co11_attendance_${dateSelect.value}.pdf`;
+    pdf.save(filename);
+    showToast('PDF downloaded');
+    return filename;
+  } catch (error) {
+    showToast('Error generating PDF: ' + error.message);
+  }
 }
 
 function buildAttendanceSnapshot() {
-  const date = dateSelect.value;
-  return realStudents.map(s => {
-    const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
-    const subjObj = {};
-    SUBJECTS.forEach(sub => subjObj[sub] = rec.dates[date]?.[sub]?.status || '—');
-    return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, ...subjObj };
-  });
+  const from = fromDate.value;
+  const to = toDate.value;
+  if (from && to) {
+    const allDates = SUBJECTS.reduce((o, s) => (o[s] = (lectureDates[s] || []).filter(d => d >= from && d <= to).sort(), o), {});
+    return realStudents.map(s => {
+      const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+      const subjObj = {};
+      SUBJECTS.forEach(sub => {
+        const total = allDates[sub].length;
+        const present = allDates[sub].filter(d => rec.dates[d]?.[sub]?.status === 'present').length;
+        const perc = total ? Math.round(present / total * 100) : 0;
+        subjObj[sub] = `${present}/${total} (${perc}%)`;
+      });
+      const totalL = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].length, 0);
+      const totalP = SUBJECTS.reduce((sum, sub) => sum + allDates[sub].filter(d => rec.dates[d]?.[sub]?.status === 'present').length, 0);
+      const overallPerc = totalL ? Math.round(totalP / totalL * 100) : 0;
+      return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, ...subjObj, overall: `${overallPerc}%` };
+    });
+  } else {
+    const date = dateSelect.value;
+    return realStudents.map(s => {
+      const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+      const subjObj = {};
+      SUBJECTS.forEach(sub => subjObj[sub] = rec.dates[date]?.[sub]?.status || '—');
+      return { enrollmentNumber: s.enrollmentNumber, name: s.name, class: s.class, ...subjObj };
+    });
+  }
 }
+
 function toCSV(rows) {
-  const header = ['Enrollment', 'Name', 'Class', ...SUBJECTS];
+  const from = fromDate.value;
+  const to = toDate.value;
+  const header = ['Enrollment', 'Name', 'Class', ...SUBJECTS, ...(from && to ? ['Overall'] : [])];
   return [header.join(',')].concat(rows.map(r => {
     const q = v => `"${String(v).replace(/"/g, '""')}"`;
-    return [q(r.enrollmentNumber), q(r.name), q(r.class), ...SUBJECTS.map(s => q(r[s]))].join(',');
+    return [q(r.enrollmentNumber), q(r.name), q(r.class), ...SUBJECTS.map(s => q(r[s])), ...(from && to ? [q(r.overall)] : [])].join(',');
   })).join('\n');
 }
+
 function downloadCSV() {
-  const rows = buildAttendanceSnapshot();
-  const csv = toCSV(rows);
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `co11_attendance_${dateSelect.value}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('CSV downloaded');
+  try {
+    const rows = buildAttendanceSnapshot();
+    const csv = toCSV(rows);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const from = fromDate.value;
+    const to = toDate.value;
+    a.download = from && to ? `co11_attendance_summary_${from}_to_${to}.csv` : `co11_attendance_${dateSelect.value}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV downloaded');
+  } catch (error) {
+    showToast('Error generating CSV: ' + error.message);
+  }
 }
 
 function openMailToDean(filename) {
   const dean = deanEmailInput.value.trim() || 'dean@example.com';
-  const subject = subjectSelect.value;
-  const date = dateSelect.value;
-  const counts = summarizeCountsForSubject(subject, date);
-  const subjectLine = encodeURIComponent(`CO11 Attendance - ${subject} - ${date}`);
-  const body = encodeURIComponent(`Dear Dean,\n\nSummary for ${subject} on ${date}:\nPresent: ${counts.present}\nLate: ${counts.late}\nAbsent: ${counts.absent}\nUnmarked: ${counts.notMarked}\n\nAttached: ${filename}\n\nRegards,\nInstructor`);
+  const from = fromDate.value;
+  const to = toDate.value;
+  let subjectLine, body;
+  if (from && to) {
+    const allDates = SUBJECTS.reduce((o, s) => (o[s] = (lectureDates[s] || []).filter(d => d >= from && d <= to).sort(), o), {});
+    const counts = SUBJECTS.reduce((o, sub) => {
+      o[sub] = { present: 0, late: 0, absent: 0, notMarked: 0 };
+      realStudents.forEach(s => {
+        const rec = attendanceRecords[s.enrollmentNumber] || { dates: {} };
+        allDates[sub].forEach(d => {
+          const status = rec.dates[d]?.[sub]?.status;
+          if (status === 'present') o[sub].present++;
+          else if (status === 'late') o[sub].late++;
+          else if (status === 'absent') o[sub].absent++;
+          else o[sub].notMarked++;
+        });
+      });
+      return o;
+    }, {});
+    subjectLine = encodeURIComponent(`CO11 Attendance Summary - ${from} to ${to}`);
+    body = encodeURIComponent(`Dear Dean,\n\nSummary for period ${from} to ${to}:\n` + SUBJECTS.map(sub => `${sub}: Present ${counts[sub].present}, Late ${counts[sub].late}, Absent ${counts[sub].absent}, Unmarked ${counts[sub].notMarked}`).join('\n') + `\n\nAttached: ${filename}\n\nRegards,\nInstructor`);
+  } else {
+    const date = dateSelect.value;
+    const subject = subjectSelect.value;
+    const counts = summarizeCountsForSubject(subject, date);
+    subjectLine = encodeURIComponent(`CO11 Attendance - ${subject} - ${date}`);
+    body = encodeURIComponent(`Dear Dean,\n\nSummary for ${subject} on ${date}:\nPresent: ${counts.present}\nLate: ${counts.late}\nAbsent: ${counts.absent}\nUnmarked: ${counts.notMarked}\n\nAttached: ${filename}\n\nRegards,\nInstructor`);
+  }
   window.location.href = `mailto:${dean}?subject=${subjectLine}&body=${body}`;
 }
+
 function summarizeCountsForSubject(subject, date) {
   let present = 0, absent = 0, late = 0, notMarked = 0;
   realStudents.forEach(s => {
@@ -676,37 +1090,67 @@ function summarizeCountsForSubject(subject, date) {
   return { present, absent, late, notMarked };
 }
 
-btnAuthAction.addEventListener('click', async () => {
+btnAuthAction.addEventListener('click', () => {
   const u = auUsername.value.trim();
+  const e = auEmail.value.trim();
   const p = auPassword.value.trim();
   if (!u || !p) return showToast('Enter username & password');
   try {
-    await loginAccount(u, p);
+    loginAccount(u, p);
     showToast('Logged in');
     onAuthChanged();
-  } catch (e) {
-    if (e.message.includes('not found')) {
+  } catch (err) {
+    if (err.message.includes('not found')) {
       try {
-        await createAccount(u, p);
-        await loginAccount(u, p);
+        createAccount(u, p, e);
+        loginAccount(u, p);
         showToast('Account created');
         onAuthChanged();
-      } catch (err) { showToast(err.message); }
-    } else showToast(e.message);
+      } catch (error) { showToast(error.message); }
+    } else showToast(err.message);
   }
 });
+
+btnForgot.addEventListener('click', () => {
+  const username = prompt('Enter username');
+  if (!username) return;
+  const users = getUsers();
+  const user = users[username.toLowerCase()];
+  if (!user) return showToast('User not found');
+  const inputEmail = prompt('Enter registered email');
+  if (inputEmail && inputEmail.toLowerCase() !== user.email) return showToast('Email mismatch');
+  const otp = Math.floor(Math.random() * 9000 + 1000);
+  alert(`OTP sent to your email: ${otp} (for demo)`);
+  const inputOtp = prompt('Enter OTP');
+  if (parseInt(inputOtp) !== otp) return showToast('Invalid OTP');
+  const newPass = prompt('Enter new password (min 3 chars)');
+  if (!newPass || newPass.length < 3) return showToast('Invalid password');
+  user.pwdHash = hashString(newPass);
+  setUsers(users);
+  showToast('Password reset successfully');
+});
+
 btnLogoutTop.addEventListener('click', () => { logout(); showToast('Logged out'); });
-function onAuthChanged() {
+
+clearRangeBtn.addEventListener('click', () => {
+  fromDate.value = '';
+  toDate.value = '';
+  renderLow();
+});
+
+async function onAuthChanged() {
   const cur = getCurrent();
   loggedInfo.textContent = cur ? cur.username : 'Not signed in';
   btnLogoutTop.style.display = cur ? 'inline-block' : 'none';
-  if (cur) loadStateForCurrent();
+  if (cur) await loadStateForCurrent();
   else {
     attendanceRecords = {};
     recentAttendance = SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+    lectureDates = SUBJECTS.reduce((o, s) => { o[s] = []; return o; }, {});
+    renderMasterList();
+    renderRecent();
+    renderLow();
   }
-  renderMasterList();
-  renderRecent();
 }
 onAuthChanged();
 
@@ -715,14 +1159,22 @@ searchBtn.addEventListener('click', () => {
   if (!q) return showToast('Enter enrollment or name');
   const student = findStudent(q);
   if (!student) return showToast('Student not found');
+  currentSelectedEnrollment = student.enrollmentNumber;
+  updateSelectedInList();
   showFound(student);
 });
+
 searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') searchBtn.click(); });
 downloadPdfBtn.addEventListener('click', downloadPDF);
 finalizeBtn.addEventListener('click', async () => {
-  const filename = await downloadPDF();
-  setTimeout(() => openMailToDean(filename), 500);
+  try {
+    const filename = await downloadPDF();
+    setTimeout(() => openMailToDean(filename), 500);
+  } catch (error) {
+    showToast('Error finalizing report: ' + error.message);
+  }
 });
+lowRefresh.addEventListener('click', renderLow);
 document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); downloadCSV(); } });
 
 function showToast(msg) {
@@ -735,8 +1187,8 @@ function showToast(msg) {
   setTimeout(() => t.remove(), 2000);
 }
 
-// Initial render to ensure student list appears
 renderMasterList();
+renderLow();
 </script>
 </body>
 </html>
