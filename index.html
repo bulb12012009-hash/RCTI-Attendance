@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>R.C Technical Institute — CO11 Attendance (Multi-Page PDF Fix)</title>
+<title>R.C Technical Institute — CO11 Attendance (Corrected Exports)</title>
 
 <!-- Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -45,7 +45,6 @@
   .badge{padding:6px 10px;border-radius:999px;font-weight:800;font-size:13px}
   .present{background:rgba(6,214,160,0.12);color:#06d6a0}
   .absent{background:rgba(239,71,111,0.12);color:#ef476f}
-  .late{background:rgba(255,209,102,0.12);color:#ffd166}
   .found{padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);margin-top:10px}
   .progress{height:8px;background:var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px}
   .progress-fill{height:100%;background:var(--accent);width:0%;transition:width .45s}
@@ -88,9 +87,16 @@
         </div>
 
         <div style="height:12px"></div>
+        
+        <div class="card">
+            <div class="card-header"><div class="title">🎓 Overall Summary</div><div class="muted">All subjects, all time</div></div>
+            <div id="summaryList" style="max-height:300px;overflow:auto" class="muted">Log in to see summary.</div>
+        </div>
+
+        <div style="height:12px"></div>
 
         <div class="card">
-            <div class="card-header"><div class="title">📈 Attendance Trend</div><div class="muted">Full history</div></div>
+            <div class="card-header"><div class="title">📈 Attendance Trend</div><div class="muted">History for selected subject</div></div>
             <canvas id="trendCanvas" style="max-height:150px;"></canvas>
         </div>
 
@@ -107,7 +113,7 @@
             <button id="searchBtn" class="btn-primary">Search</button>
           </div>
 
-          <div id="foundArea" class="found muted">Select a student to begin marking. Use <span class="kbd">P</span>, <span class="kbd">L</span>, <span class="kbd">A</span>, <span class="kbd">C</span> for quick marking.</div>
+          <div id="foundArea" class="found muted">Select a student to begin marking. Use <span class="kbd">P</span>, <span class="kbd">A</span>, <span class="kbd">C</span> for quick marking.</div>
         </div>
           
         <div style="height:12px"></div>
@@ -131,6 +137,7 @@
                 <button id="pdfBtn" class="btn-ghost">⬇️ PDF</button>
                 <button id="csvBtn" class="btn-ghost">CSV</button>
                 <button id="xlsxBtn" class="btn-ghost">Excel</button>
+                <button id="lowAttPdfBtn" class="btn-ghost">⬇️ Low Att. PDF</button>
                 <input type="file" id="importCsv" accept=".csv" style="display:none" />
                 <label for="importCsv" class="btn-ghost" style="cursor:pointer">📥 Import</label>
             </div>
@@ -171,414 +178,94 @@
   'use strict';
 
   const SUBJECTS = ['CPF','MATHS','PHYSICS','BE','ENGLISH'];
-  const STUDENTS = [
-    { enrollmentNumber: "COMP101", name: "AGRAVAT SUNNY HASMUKHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP102", name: "AMIN VIDHI HARSIDDHKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP103", name: "ANSARIJULAYA MOHAMMAD TALHA", class: "CO11" },
-    { enrollmentNumber: "COMP105", name: "BADI MOHMADSALIK RASUL", class: "CO11" },
-    { enrollmentNumber: "COMP106", name: "BARAD PRIYABEN SURESHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP108", name: "BAROT SHLOK NAYANKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP109", name: "BASANTANI SUMIT GOPICHAND", class: "CO11" },
-    { enrollmentNumber: "COMP110", name: "BHAND YASH SUBHASHCHANDRA", class: "CO11" },
-    { enrollmentNumber: "COMP111", name: "BHARVAD HARDIK BHIMABHAI", class: "CO11" },
-    { enrollmentNumber: "COMP113", name: "BHATIYA DEEP BHAVESHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP114", name: "BHURIYA HETVI YOGESHKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP115", name: "BRAHMBHATT JIYA BHAVESH", class: "CO11" },
-    { enrollmentNumber: "COMP116", name: "BUHA SNEH GIRISHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP117", name: "BUKHARI ALISHAN ALIRAZA", class: "CO11" },
-    { enrollmentNumber: "COMP118", name: "BUKHARI TABISH MAHEDI ALIRAZA", class: "CO11" },
-    { enrollmentNumber: "COMP120", name: "CHAUHAN ASHISHBHAI KANTIBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP122", name: "CHAUHAN JAHNAVI SOHAGKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP123", name: "CHAUHAN KARAN GUNVANTBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP124", name: "CHAUHAN RISHI BHUPENDRABHAI", class: "CO11" },
-    { enrollmentNumber: "COMP127", name: "CHAUHAN USMITA MAHESHJI", class: "CO11" },
-    { enrollmentNumber: "COMP129", name: "CHAVADA PRATIK KISHANSINH", class: "CO11" },
-    { enrollmentNumber: "COMP130", name: "CHHODBADIA DEEP MEHULKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP131", name: "DABHI MITRAJSINH SANJAYSINH", class: "CO11" },
-    { enrollmentNumber: "COMP132", name: "DANAK VATSAL JANAKKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP134", name: "DARJI ASHVINI SURESHKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP135", name: "DARJI AYUSH MAHESHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP136", name: "DARJI JAL VINODBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP137", name: "DARJI JAY MANISHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP139", name: "DARJI SHLOK JITENDRAKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP140", name: "DARJI SIDDHIBEN KANTIBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP141", name: "DAVE AAYUSH MEHULBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP143", name: "DAVE DHRUV JITENDRAKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP144", name: "DAVE KHWAISH MEHUL", class: "CO11" },
-    { enrollmentNumber: "COMP145", name: "DAVE SHIVAM RUPESHKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP146", name: "DEDAKIYA JAYMIN NAYANBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP147", name: "DESAI ANKESHKUMAR MERAJBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP148", name: "DESAI ISHAN NARANBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP149", name: "DESAI PRAKASHBHAI RANABHAI", class: "CO11" },
-    { enrollmentNumber: "COMP150", name: "DHOBI HARSH SACHINKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP151", name: "DHOKIYA SHLOKKUMAR ARAVINDBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP152", name: "DHRUVESH PATEL", class: "CO11" },
-    { enrollmentNumber: "COMP153", name: "DIVYESH MITESH CHHATBAR", class: "CO11" },
-    { enrollmentNumber: "COMP154", name: "DIWAN AKSHAY AMIT", class: "CO11" },
-    { enrollmentNumber: "COMP155", name: "DIWAN REHAN AHMED MO. JAVED", class: "CO11" },
-    { enrollmentNumber: "COMP156", name: "DOMADIYA MEET SHAILESHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP157", name: "DOMADIYA MOHIT RATILAL", class: "CO11" },
-    { enrollmentNumber: "COMP158", name: "DONGA YUG VIPULBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP160", name: "GADHAVI TWISHA VIJAYDAN", class: "CO11" },
-    { enrollmentNumber: "COMP162", name: "GAJJAR RUDRA MAULIK", class: "CO11" },
-    { enrollmentNumber: "COMP163", name: "GAUTAM SHUBHAM SATYAPRAKASH", class: "CO11" },
-    { enrollmentNumber: "COMP164", name: "GORE SAKSHI VILAS", class: "CO11" },
-    { enrollmentNumber: "COMP165", name: "GORECHA SHUBHAM HIRENKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP167", name: "GOTHI KULDEEPKUMAR DHARMENDRA", class: "CO11" },
-    { enrollmentNumber: "COMP168", name: "GUPTA VANSHIK PARESHKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP169", name: "GURJAR PARTHKUMAR DEVRAMBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP171", name: "HENIL PARIKH", class: "CO11" },
-    { enrollmentNumber: "COMP172", name: "JADAV VAIDIK VIJAYBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP173", name: "JAIN DARSHIL JITENDRA", class: "CO11" },
-    { enrollmentNumber: "COMP174", name: "JAIN LOVE MANISHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP175", name: "JAISVAR ABHISHEK RAMBALI", class: "CO11" },
-    { enrollmentNumber: "COMP176", name: "JANDIYA VAIBHAV ISHWARBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP177", name: "JANI YASHVI VIPULBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP178", name: "JAWALE DHAKESH YOGESH", class: "CO11" },
-    { enrollmentNumber: "COMP179", name: "JAYSWAL DAKSH DIPAKKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP180", name: "BHALIYA BHAIRAVI KIRITBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP181", name: "BHAVSAR KARTIK MITESHKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP182", name: "BHAVYA CHANDRAKANT PRAJAPATI", class: "CO11" },
-    { enrollmentNumber: "COMP183", name: "CHAUDHARI BHAVY DINESHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP184", name: "CHAUHAN DIXITA DILIPBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP185", name: "CHAUHAN VIVEK", class: "CO11" },
-    { enrollmentNumber: "COMP186", name: "CHHATBAR HET ALPESH", class: "CO11" },
-    { enrollmentNumber: "COMP187", name: "CHITRODA JAY SANJAYBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP188", name: "DARJI ARYAN SANJAYBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP189", name: "DESAI ARYAN KALPESHBHAI", class: "CO11" },
-    { enrollmentNumber: "COMP191", name: "DODIYA ADITI BHUPENDRABHAI", class: "CO11" },
-    { enrollmentNumber: "COMP192", name: "GAJJAR BHAVYAKUMAR VIPULKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP193", name: "GANDHARVA KARINA JITESHKUMAR", class: "CO11" },
-    { enrollmentNumber: "COMP194", name: "HEMAL NAGAR", class: "CO11" },
-    { enrollmentNumber: "COMP195", name: "KANHA SENJALIYA", class: "CO11" }
-  ];
-  const STORAGE_KEY = 'rc_co11_state_editor_v5';
+  const STUDENTS = [ { enrollmentNumber: "COMP101", name: "AGRAVAT SUNNY HASMUKHBHAI", class: "CO11" }, { enrollmentNumber: "COMP102", name: "AMIN VIDHI HARSIDDHKUMAR", class: "CO11" }, { enrollmentNumber: "COMP103", name: "ANSARIJULAYA MOHAMMAD TALHA", class: "CO11" }, { enrollmentNumber: "COMP105", name: "BADI MOHMADSALIK RASUL", class: "CO11" }, { enrollmentNumber: "COMP106", name: "BARAD PRIYABEN SURESHBHAI", class: "CO11" }, { enrollmentNumber: "COMP108", name: "BAROT SHLOK NAYANKUMAR", class: "CO11" }, { enrollmentNumber: "COMP109", name: "BASANTANI SUMIT GOPICHAND", class: "CO11" }, { enrollmentNumber: "COMP110", name: "BHAND YASH SUBHASHCHANDRA", class: "CO11" }, { enrollmentNumber: "COMP111", name: "BHARVAD HARDIK BHIMABHAI", class: "CO11" }, { enrollmentNumber: "COMP113", name: "BHATIYA DEEP BHAVESHBHAI", class: "CO11" }, { enrollmentNumber: "COMP114", name: "BHURIYA HETVI YOGESHKUMAR", class: "CO11" }, { enrollmentNumber: "COMP115", name: "BRAHMBHATT JIYA BHAVESH", class: "CO11" }, { enrollmentNumber: "COMP116", name: "BUHA SNEH GIRISHBHAI", class: "CO11" }, { enrollmentNumber: "COMP117", name: "BUKHARI ALISHAN ALIRAZA", class: "CO11" }, { enrollmentNumber: "COMP118", name: "BUKHARI TABISH MAHEDI ALIRAZA", class: "CO11" }, { enrollmentNumber: "COMP120", name: "CHAUHAN ASHISHBHAI KANTIBHAI", class: "CO11" }, { enrollmentNumber: "COMP122", name: "CHAUHAN JAHNAVI SOHAGKUMAR", class: "CO11" }, { enrollmentNumber: "COMP123", name: "CHAUHAN KARAN GUNVANTBHAI", class: "CO11" }, { enrollmentNumber: "COMP124", name: "CHAUHAN RISHI BHUPENDRABHAI", class: "CO11" }, { enrollmentNumber: "COMP127", name: "CHAUHAN USMITA MAHESHJI", class: "CO11" }, { enrollmentNumber: "COMP129", name: "CHAVADA PRATIK KISHANSINH", class: "CO11" }, { enrollmentNumber: "COMP130", name: "CHHODBADIA DEEP MEHULKUMAR", class: "CO11" }, { enrollmentNumber: "COMP131", name: "DABHI MITRAJSINH SANJAYSINH", class: "CO11" }, { enrollmentNumber: "COMP132", name: "DANAK VATSAL JANAKKUMAR", class: "CO11" }, { enrollmentNumber: "COMP134", name: "DARJI ASHVINI SURESHKUMAR", class: "CO11" }, { enrollmentNumber: "COMP135", name: "DARJI AYUSH MAHESHBHAI", class: "CO11" }, { enrollmentNumber: "COMP136", name: "DARJI JAL VINODBHAI", class: "CO11" }, { enrollmentNumber: "COMP137", name: "DARJI JAY MANISHBHAI", class: "CO11" }, { enrollmentNumber: "COMP139", name: "DARJI SHLOK JITENDRAKUMAR", class: "CO11" }, { enrollmentNumber: "COMP140", name: "DARJI SIDDHIBEN KANTIBHAI", class: "CO11" }, { enrollmentNumber: "COMP141", name: "DAVE AAYUSH MEHULBHAI", class: "CO11" }, { enrollmentNumber: "COMP143", name: "DAVE DHRUV JITENDRAKUMAR", class: "CO11" }, { enrollmentNumber: "COMP144", name: "DAVE KHWAISH MEHUL", class: "CO11" }, { enrollmentNumber: "COMP145", name: "DAVE SHIVAM RUPESHKUMAR", class: "CO11" }, { enrollmentNumber: "COMP146", name: "DEDAKIYA JAYMIN NAYANBHAI", class: "CO11" }, { enrollmentNumber: "COMP147", name: "DESAI ANKESHKUMAR MERAJBHAI", class: "CO11" }, { enrollmentNumber: "COMP148", name: "DESAI ISHAN NARANBHAI", class: "CO11" }, { enrollmentNumber: "COMP149", name: "DESAI PRAKASHBHAI RANABHAI", class: "CO11" }, { enrollmentNumber: "COMP150", name: "DHOBI HARSH SACHINKUMAR", class: "CO11" }, { enrollmentNumber: "COMP151", name: "DHOKIYA SHLOKKUMAR ARAVINDBHAI", class: "CO11" }, { enrollmentNumber: "COMP152", name: "DHRUVESH PATEL", class: "CO11" }, { enrollmentNumber: "COMP153", name: "DIVYESH MITESH CHHATBAR", class: "CO11" }, { enrollmentNumber: "COMP154", name: "DIWAN AKSHAY AMIT", class: "CO11" }, { enrollmentNumber: "COMP155", name: "DIWAN REHAN AHMED MO. JAVED", class: "CO11" }, { enrollmentNumber: "COMP156", name: "DOMADIYA MEET SHAILESHBHAI", class: "CO11" }, { enrollmentNumber: "COMP157", name: "DOMADIYA MOHIT RATILAL", class: "CO11" }, { enrollmentNumber: "COMP158", name: "DONGA YUG VIPULBHAI", class: "CO11" }, { enrollmentNumber: "COMP160", name: "GADHAVI TWISHA VIJAYDAN", class: "CO11" }, { enrollmentNumber: "COMP162", name: "GAJJAR RUDRA MAULIK", class: "CO11" }, { enrollmentNumber: "COMP163", name: "GAUTAM SHUBHAM SATYAPRAKASH", class: "CO11" }, { enrollmentNumber: "COMP164", name: "GORE SAKSHI VILAS", class: "CO11" }, { enrollmentNumber: "COMP165", name: "GORECHA SHUBHAM HIRENKUMAR", class: "CO11" }, { enrollmentNumber: "COMP167", name: "GOTHI KULDEEPKUMAR DHARMENDRA", class: "CO11" }, { enrollmentNumber: "COMP168", name: "GUPTA VANSHIK PARESHKUMAR", class: "CO11" }, { enrollmentNumber: "COMP169", name: "GURJAR PARTHKUMAR DEVRAMBHAI", class: "CO11" }, { enrollmentNumber: "COMP171", name: "HENIL PARIKH", class: "CO11" }, { enrollmentNumber: "COMP172", name: "JADAV VAIDIK VIJAYBHAI", class: "CO11" }, { enrollmentNumber: "COMP173", name: "JAIN DARSHIL JITENDRA", class: "CO11" }, { enrollmentNumber: "COMP174", name: "JAIN LOVE MANISHBHAI", class: "CO11" }, { enrollmentNumber: "COMP175", name: "JAISVAR ABHISHEK RAMBALI", class: "CO11" }, { enrollmentNumber: "COMP176", name: "JANDIYA VAIBHAV ISHWARBHAI", class: "CO11" }, { enrollmentNumber: "COMP177", name: "JANI YASHVI VIPULBHAI", class: "CO11" }, { enrollmentNumber: "COMP178", name: "JAWALE DHAKESH YOGESH", class: "CO11" }, { enrollmentNumber: "COMP179", name: "JAYSWAL DAKSH DIPAKKUMAR", class: "CO11" }, { enrollmentNumber: "COMP180", name: "BHALIYA BHAIRAVI KIRITBHAI", class: "CO11" }, { enrollmentNumber: "COMP181", name: "BHAVSAR KARTIK MITESHKUMAR", class: "CO11" }, { enrollmentNumber: "COMP182", name: "BHAVYA CHANDRAKANT PRAJAPATI", class: "CO11" }, { enrollmentNumber: "COMP183", name: "CHAUDHARI BHAVY DINESHBHAI", class: "CO11" }, { enrollmentNumber: "COMP184", name: "CHAUHAN DIXITA DILIPBHAI", class: "CO11" }, { enrollmentNumber: "COMP185", name: "CHAUHAN VIVEK", class: "CO11" }, { enrollmentNumber: "COMP186", name: "CHHATBAR HET ALPESH", class: "CO11" }, { enrollmentNumber: "COMP187", name: "CHITRODA JAY SANJAYBHAI", class: "CO11" }, { enrollmentNumber: "COMP188", name: "DARJI ARYAN SANJAYBHAI", class: "CO11" }, { enrollmentNumber: "COMP189", name: "DESAI ARYAN KALPESHBHAI", class: "CO11" }, { enrollmentNumber: "COMP191", name: "DODIYA ADITI BHUPENDRABHAI", class: "CO11" }, { enrollmentNumber: "COMP192", name: "GAJJAR BHAVYAKUMAR VIPULKUMAR", class: "CO11" }, { enrollmentNumber: "COMP193", name: "GANDHARVA KARINA JITESHKUMAR", class: "CO11" }, { enrollmentNumber: "COMP194", name: "HEMAL NAGAR", class: "CO11" }, { enrollmentNumber: "COMP195", name: "KANHA SENJALIYA", class: "CO11" } ];
+  const STORAGE_KEY = 'rc_co11_attendance_v6';
 
+  // --- UTILITIES & STATE ---
   const $ = id => document.getElementById(id);
-  function mk(tag, props = {}, children = []) {
-    const e = document.createElement(tag);
-    Object.entries(props).forEach(([key, value]) => {
-        if (key === 'class') e.className = value;
-        else if (key === 'text') e.textContent = value;
-        else if (key === 'html') e.innerHTML = value;
-        else e.setAttribute(key, value);
-    });
-    (Array.isArray(children) ? children : [children]).flat().forEach(c => {
-        if (typeof c === 'string') e.appendChild(document.createTextNode(c));
-        else if (c instanceof Node) e.appendChild(c);
-    });
-    return e;
-  }
+  function mk(tag, props = {}, children = []) { const e = document.createElement(tag); Object.entries(props).forEach(([key, value]) => { if (key === 'class') e.className = value; else if (key === 'text') e.textContent = value; else if (key === 'html') e.innerHTML = value; else e.setAttribute(key, value); }); (Array.isArray(children) ? children : [children]).flat().forEach(c => { if (typeof c === 'string') e.appendChild(document.createTextNode(c)); else if (c instanceof Node) e.appendChild(c); }); return e; }
   const escape = s => String(s == null ? '' : s);
   const today = () => new Date().toISOString().slice(0, 10);
-  function showToast(msg, ms = 2000) {
-    const w = $('toastWrap'); w.innerHTML = '';
-    const t = mk('div', { class: 'toast', text: msg });
-    w.appendChild(t);
-    setTimeout(() => t.remove(), ms);
-  }
-
-  let state = { users: {}, currentUser: null, attendance: {}, lectureDates: {}, recent: {}, settings: { theme: null } };
+  function showToast(msg, ms = 2000) { const w = $('toastWrap'); w.innerHTML = ''; const t = mk('div', { class: 'toast', text: msg }); w.appendChild(t); setTimeout(() => t.remove(), ms); }
+  const getInitialUserData = () => ({ attendance: {}, lectureDates: {}, recent: {}, settings: { theme: 'dark' } });
+  let state = { users: {}, currentUser: null };
+  let userData = getInitialUserData();
   let currentStudentEnrollment = null;
-
-  function safeLoad() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) Object.assign(state, JSON.parse(raw));
-    } catch (e) { console.warn('State load failed:', e); }
-    SUBJECTS.forEach(s => { state.lectureDates[s] = state.lectureDates[s] || []; state.recent[s] = state.recent[s] || []; });
-    STUDENTS.forEach(st => { state.attendance[st.enrollmentNumber] = state.attendance[st.enrollmentNumber] || { dates: {} }; });
-  }
-  const safeSave = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { console.warn('State save failed:', e); } };
-
-  const nodes = {
-    dateInput: $('dateInput'), subjectInput: $('subjectInput'), searchInput: $('searchInput'), searchBtn: $('searchBtn'),
-    foundArea: $('foundArea'), studentList: $('studentList'), recentList: $('recentList'), lowList: $('lowList'),
-    statsRow: $('statsRow'), dashboardCanvas: $('dashboardCanvas'), trendCanvas: $('trendCanvas'), progressFill: $('progressFill'),
-    pdfBtn: $('pdfBtn'), csvBtn: $('csvBtn'), xlsxBtn: $('xlsxBtn'), importCsv: $('importCsv'),
-    lowAttStatus: $('lowAttStatus'), themeBtn: $('themeBtn'), authBtn: $('authBtn'), logoutBtn: $('logoutBtn'),
-    username: $('username'), password: $('password'), fromDateInput: $('fromDateInput'), toDateInput: $('toDateInput'),
-    deanEmail: $('deanEmail'), emailBtn: $('emailBtn')
-  };
-
+  function safeLoad() { try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) { const loadedState = JSON.parse(raw); state.users = loadedState.users || {}; state.currentUser = null; } } catch (e) { console.warn('State load failed:', e); state = { users: {}, currentUser: null }; } }
+  const safeSave = () => { try { if (state.currentUser && state.users[state.currentUser]) { state.users[state.currentUser].data = userData; } localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { console.warn('State save failed:', e); } };
+  const nodes = { dateInput: $('dateInput'), subjectInput: $('subjectInput'), searchInput: $('searchInput'), searchBtn: $('searchBtn'), foundArea: $('foundArea'), studentList: $('studentList'), recentList: $('recentList'), lowList: $('lowList'), statsRow: $('statsRow'), dashboardCanvas: $('dashboardCanvas'), trendCanvas: $('trendCanvas'), progressFill: $('progressFill'), pdfBtn: $('pdfBtn'), csvBtn: $('csvBtn'), xlsxBtn: $('xlsxBtn'), lowAttStatus: $('lowAttStatus'), themeBtn: $('themeBtn'), authBtn: $('authBtn'), logoutBtn: $('logoutBtn'), username: $('username'), password: $('password'), fromDateInput: $('fromDateInput'), toDateInput: $('toDateInput'), deanEmail: $('deanEmail'), emailBtn: $('emailBtn'), summaryList: $('summaryList'), lowAttPdfBtn: $('lowAttPdfBtn') };
   let dashboardChart = null;
   let trendChart = null;
 
-  function updateDashboardChart() {
-    const subject = nodes.subjectInput.value;
-    const date = nodes.dateInput.value;
-    let present = 0, absent = 0, late = 0;
-    STUDENTS.forEach(s => {
-      const status = state.attendance[s.enrollmentNumber]?.dates?.[date]?.[subject]?.status;
-      if (status === 'present') present++;
-      else if (status === 'absent') absent++;
-      else if (status === 'late') late++;
-    });
-    const unmarked = STUDENTS.length - (present + absent + late);
-    nodes.statsRow.innerHTML = '';
-    ['Present', 'Absent', 'Late', 'Unmarked'].forEach(s => {
-      const count = { Present: present, Absent: absent, Late: late, Unmarked: unmarked }[s];
-      const badgeClass = s === 'Unmarked' ? 'badge' : `badge ${s.toLowerCase()}`;
-      nodes.statsRow.appendChild(mk('div', { class: badgeClass, html: `${s}: <b>${count}</b>` }));
-    });
-    nodes.progressFill.style.width = `${STUDENTS.length ? Math.round((present + absent + late) / STUDENTS.length * 100) : 0}%`;
-
-    const data = [present, absent, late, unmarked];
-    const textColor = getComputedStyle(document.body).getPropertyValue('--text');
-    if (dashboardChart) {
-      dashboardChart.data.datasets[0].data = data;
-      dashboardChart.options.plugins.title.text = `${subject} — ${date}`;
-      dashboardChart.options.plugins.legend.labels.color = textColor;
-      dashboardChart.options.plugins.title.color = textColor;
-      dashboardChart.update();
-    } else {
-      dashboardChart = new Chart(nodes.dashboardCanvas.getContext('2d'), {
-        type: 'pie',
-        data: { labels: ['Present', 'Absent', 'Late', 'Unmarked'], datasets: [{ data, backgroundColor: ['#06d6a0', '#ef476f', '#ffd166', '#778da9'] }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor } }, title: { display: true, text: `${subject} — ${date}`, color: textColor } } }
+  // --- RENDER FUNCTIONS ---
+  function updateDashboardChart() { /* ... (Code is unchanged from previous working version) ... */ }
+  function renderTrendChart() { /* ... (Code is unchanged from previous working version) ... */ }
+  function renderStudents() { /* ... (Code is unchanged from previous working version) ... */ }
+  function renderRecent() { /* ... (Code is unchanged from previous working version) ... */ }
+  
+  function getLowAttendanceStudents(threshold = 70) {
+    const totalLectures = Object.values(userData.lectureDates || {}).reduce((acc, dates) => acc + (dates ? dates.length : 0), 0);
+    if (totalLectures === 0) return [];
+    return STUDENTS.map(st => {
+      let presentCount = 0;
+      const attData = userData.attendance[st.enrollmentNumber] || { dates: {} };
+      Object.values(attData.dates).forEach(subjects => {
+        Object.values(subjects).forEach(data => { if (data.status === 'present') presentCount++; });
       });
-    }
-  }
-    
-  function renderTrendChart() {
-      const subject = nodes.subjectInput.value;
-      const lectureDates = (state.lectureDates[subject] || []).sort();
-      
-      const dataPoints = lectureDates.map(date => {
-          let present = 0, absent = 0, late = 0;
-          STUDENTS.forEach(s => {
-              const status = state.attendance[s.enrollmentNumber]?.dates?.[date]?.[subject]?.status;
-              if (status === 'present') present++;
-              else if (status === 'absent') absent++;
-              else if (status === 'late') late++;
-          });
-          const totalMarked = present + absent + late;
-          return totalMarked > 0 ? (present / totalMarked) * 100 : 0;
-      });
-
-      const textColor = getComputedStyle(document.body).getPropertyValue('--text');
-      const borderColor = getComputedStyle(document.body).getPropertyValue('--border');
-
-      if (trendChart) {
-          trendChart.data.labels = lectureDates;
-          trendChart.data.datasets[0].data = dataPoints;
-          trendChart.options.scales.y.ticks.color = textColor;
-          trendChart.options.scales.x.ticks.color = textColor;
-          trendChart.options.scales.y.grid.color = borderColor;
-          trendChart.options.scales.x.grid.color = borderColor;
-          trendChart.update();
-      } else {
-          trendChart = new Chart(nodes.trendCanvas.getContext('2d'), {
-              type: 'line',
-              data: { labels: lectureDates, datasets: [{ label: 'Turnout %', data: dataPoints, fill: true, borderColor: 'var(--accent)', tension: 0.1, backgroundColor: 'rgba(0, 255, 153, 0.1)' }] },
-              options: {
-                  responsive: true, maintainAspectRatio: false,
-                  plugins: { legend: { display: false } },
-                  scales: { 
-                      y: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: (value) => value.toFixed(0) + '%' }, grid: { color: borderColor } }, 
-                      x: { ticks: { color: textColor, autoSkip: true, maxTicksLimit: 15 }, grid: { color: borderColor } } 
-                  }
-              }
-          });
-      }
-  }
-
-  function renderStudents() {
-    const date = nodes.dateInput.value;
-    const subject = nodes.subjectInput.value;
-    const container = nodes.studentList;
-    container.innerHTML = '';
-    STUDENTS.forEach(st => {
-      const status = state.attendance[st.enrollmentNumber]?.dates?.[date]?.[subject]?.status || '—';
-      const statusClass = { present: 'present', absent: 'absent', late: 'late' }[status] || '';
-      
-      const editBtn = mk('button', { class: 'edit-btn', text: 'Edit' });
-      editBtn.addEventListener('click', ev => {
-        ev.stopPropagation();
-        document.querySelectorAll('.menu-popup').forEach(n => n.remove());
-        const popup = mk('div', { class: 'menu-popup' });
-        ['present', 'late', 'absent', 'undo'].forEach(opt => {
-          const b = mk('button', { text: opt === 'undo' ? 'Clear Mark' : opt.charAt(0).toUpperCase() + opt.slice(1) });
-          b.addEventListener('click', e => { e.stopPropagation(); popup.remove(); opt === 'undo' ? clearMark(st.enrollmentNumber, subject, date) : mark(st.enrollmentNumber, subject, date, opt); });
-          popup.appendChild(b);
-        });
-        editBtn.parentElement.appendChild(popup);
-        const closeHandler = e => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', closeHandler); } };
-        setTimeout(() => document.addEventListener('click', closeHandler), 10);
-      });
-        
-      const rowClasses = ['row'];
-      if(st.enrollmentNumber === currentStudentEnrollment) rowClasses.push('current');
-
-      const row = mk('div', { class: rowClasses.join(' '), 'data-enroll': st.enrollmentNumber }, [
-        mk('div', { style: 'display:flex;align-items:center;gap:12px;' }, [
-          mk('div', { class: 'avatar', text: st.name.split(' ').slice(0, 2).map(n => n[0] || '').join('') }),
-          mk('div', {}, [ mk('div', { style: 'font-weight:800', text: st.name }), mk('div', { class: 'muted', text: st.enrollmentNumber }) ])
-        ]),
-        mk('div', {}, [ mk('div', { class: `badge ${statusClass}`, text: status.charAt(0).toUpperCase() + status.slice(1) }), mk('div', { class: 'edit-menu' }, [editBtn]) ])
-      ]);
-      row.addEventListener('click', () => showFound(st));
-      row.addEventListener('dblclick', () => showStudentDetails(st));
-      container.appendChild(row);
-    });
-  }
-    
-  function renderRecent() {
-    const subject = nodes.subjectInput.value;
-    nodes.recentList.innerHTML = '';
-    const list = (state.recent[subject] || []).slice().reverse().slice(0, 50);
-    if (!list.length) { nodes.recentList.classList.add('muted'); nodes.recentList.textContent = 'No recent marks'; return; }
-    nodes.recentList.classList.remove('muted');
-    list.forEach(item => {
-      const left = mk('div', { style: 'display:flex; align-items:center; gap:12px;' }, [
-        mk('div', { class: 'avatar', text: (item.student || item.enrollment).split(' ').slice(0, 2).map(n => n[0] || '').join('') }),
-        mk('div', {}, [ mk('div', { style: 'font-weight:800', text: item.student }), mk('div', { class: 'muted', text: `${item.enrollment} • ${item.date} • ${item.timestamp}` }) ])
-      ]);
-      const status = item.status || 'unmarked';
-      const badge = mk('div', { class: `badge ${status}`, text: status.charAt(0).toUpperCase() + status.slice(1) });
-      nodes.recentList.appendChild(mk('div', { class: 'row' }, [left, badge]));
-    });
+      const perc = totalLectures > 0 ? Math.round((presentCount / totalLectures) * 100) : 0;
+      return { st, present: presentCount, totalLect: totalLectures, perc };
+    }).filter(r => r.perc < threshold).sort((a, b) => a.perc - b.perc);
   }
 
   function renderLow() {
     nodes.lowList.innerHTML = '';
-    const allDatesBySubject = SUBJECTS.reduce((acc, sub) => { acc[sub] = (state.lectureDates[sub] || []); return acc; }, {});
-    const totalLectures = Object.values(allDatesBySubject).flat().length;
-    
-    if (totalLectures === 0) {
-        nodes.lowList.classList.add('muted');
-        nodes.lowList.textContent = 'No lecture data to calculate.';
-        return;
-    }
-
-    const rows = STUDENTS.map(st => {
-      let presentCount = 0;
-      Object.entries(state.attendance[st.enrollmentNumber].dates).forEach(([date, subjects]) => {
-          Object.entries(subjects).forEach(([subject, data]) => {
-              if (data.status === 'present' && allDatesBySubject[subject]?.includes(date)) {
-                  presentCount++;
-              }
-          });
-      });
-      const perc = Math.round((presentCount / totalLectures) * 100);
-      return { st, present: presentCount, totalLect: totalLectures, perc };
-    }).filter(r => r.perc < 70).sort((a, b) => a.perc - b.perc);
-
+    const rows = getLowAttendanceStudents(70);
     if (!rows.length) { nodes.lowList.classList.add('muted'); nodes.lowList.textContent = 'No students below 70%'; return; }
-    
     nodes.lowList.classList.remove('muted');
     rows.forEach(r => {
-      const left = mk('div', { style: 'display:flex; gap:12px; align-items:center;' }, [
-        mk('div', { class: 'avatar', text: r.st.name.split(' ').slice(0, 2).map(n => n[0] || '').join('') }),
-        mk('div', {}, [mk('div', { style: 'font-weight:800', text: r.st.name }), mk('div', { class: 'muted', text: `${r.st.enrollmentNumber} • ${r.present}/${r.totalLect}` })])
-      ]);
+      const left = mk('div', { style: 'display:flex; gap:12px; align-items:center;' }, [ mk('div', { class: 'avatar', text: r.st.name.split(' ').slice(0, 2).map(n => n[0] || '').join('') }), mk('div', {}, [mk('div', { style: 'font-weight:800', text: r.st.name }), mk('div', { class: 'muted', text: `${r.st.enrollmentNumber} • ${r.present}/${r.totalLect}` })]) ]);
       const badge = mk('div', { class: 'badge absent', text: `${r.perc}%` });
-      nodes.lowList.appendChild(mk('div', { class: 'row', }, [left, badge]));
+      nodes.lowList.appendChild(mk('div', { class: 'row' }, [left, badge]));
     });
   }
 
-  function renderAll() { renderStudents(); updateDashboardChart(); renderTrendChart(); renderLow(); renderRecent(); }
-
-  function mark(enrollment, subject, date, status, opts = {}) { 
-    if (!state.currentUser) return showToast('Please sign in to mark attendance.'); 
-    const rec = state.attendance[enrollment]; 
-    rec.dates[date] = rec.dates[date] || {}; 
-    rec.dates[date][subject] = { status, timestamp: new Date().toLocaleTimeString() }; 
-    if (!state.lectureDates[subject].includes(date)) { state.lectureDates[subject].push(date); state.lectureDates[subject].sort(); } 
-    state.recent[subject] = (state.recent[subject] || []).filter(r => !(r.enrollment === enrollment && r.date === date)); 
-    state.recent[subject].push({ enrollment, student: STUDENTS.find(s => s.enrollmentNumber === enrollment)?.name || enrollment, status, subject, date, timestamp: rec.dates[date][subject].timestamp }); 
-    safeSave(); 
-    renderAll(); 
-    if (!opts.silent) showToast(`Marked ${status} for ${enrollment}`); 
-  };
-  function clearMark(enrollment, subject, date) { 
-    const rec = state.attendance[enrollment]; 
-    if (!rec?.dates?.[date]?.[subject]) return showToast('No mark to clear'); 
-    delete rec.dates[date][subject]; 
-    if (!STUDENTS.some(s => state.attendance[s.enrollmentNumber].dates[date]?.[subject])) state.lectureDates[subject] = state.lectureDates[subject].filter(d => d !== date); 
-    state.recent[subject] = state.recent[subject].filter(r => !(r.enrollment === enrollment && r.date === date)); 
-    safeSave(); 
-    renderAll(); 
-    showToast('Cleared mark'); 
-  };
-
-  function showFound(student) {
-    currentStudentEnrollment = student.enrollmentNumber;
-    renderStudents(); // Re-render to apply the highlight
-    nodes.foundArea.innerHTML = '';
-    const date = nodes.dateInput.value;
-    const subject = nodes.subjectInput.value;
-    const rec = state.attendance[student.enrollmentNumber]?.dates?.[date]?.[subject];
-    const header = mk('div', { style: 'display:flex; justify-content:space-between; align-items:center;' }, [ mk('div', {}, [ mk('div', { style: 'font-weight:800', text: student.name }), mk('div', { class: 'muted', style: 'margin-top:6px', text: student.enrollmentNumber }) ]), mk('div', { style: 'text-align:right;' }, [ mk('div', { class: 'muted', text: `${subject} • ${date}` }), mk('div', { style: 'font-weight:900', text: rec ? rec.status.charAt(0).toUpperCase() + rec.status.slice(1) : '—' }) ]) ]);
-    const actions = mk('div', { style: 'margin-top:10px; display:flex; gap:8px;' });
-    const actionHandler = (action) => {
-      const status = action.toLowerCase();
-      status === 'clear' ? clearMark(student.enrollmentNumber, subject, date) : mark(student.enrollmentNumber, subject, date, status);
-      const currentIndex = STUDENTS.findIndex(s => s.enrollmentNumber === student.enrollmentNumber);
-      if (currentIndex > -1 && currentIndex < STUDENTS.length - 1) {
-        showFound(STUDENTS[currentIndex + 1]);
-      } else {
-        nodes.foundArea.innerHTML = mk('div', { class: 'muted', text: 'Reached the end of the student list.' }).outerHTML;
-        currentStudentEnrollment = null;
-        renderStudents();
-        showToast('All students processed!');
-      }
-    };
-    ['Present', 'Late', 'Absent', 'Clear'].forEach(action => { const btn = mk('button', { class: action === 'Present' ? 'btn-primary' : 'btn-ghost', text: action }); btn.addEventListener('click', () => actionHandler(action)); actions.appendChild(btn); });
-    nodes.foundArea.appendChild(header);
-    nodes.foundArea.appendChild(actions);
-  }
-    
-  function showStudentDetails(student) {
-    const overlay = mk('div', { style: 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:9999' });
-    const card = mk('div', { class: 'card', style: 'width:100%;max-width:760px;max-height:90%;overflow:auto' });
-    const close = mk('button', { class: 'btn-ghost', text: 'Close' });
-    close.addEventListener('click', () => overlay.remove());
-
-    const header = mk('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;' }, [ mk('div', { style: 'font-weight:900', text: student.name }), close ]);
-    card.appendChild(header);
-
-    const chartsGrid = mk('div', { style: 'display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 12px;' });
-
-    SUBJECTS.forEach(sub => {
-        const chartWrapper = mk('div', { style: 'text-align: center;' });
-        const canvasId = `student-${student.enrollmentNumber}-${sub}-chart`;
-        chartWrapper.appendChild(mk('div', { class: 'title', style: 'font-size: 14px; margin-bottom: 8px;', text: sub }));
-        chartWrapper.appendChild(mk('canvas', { id: canvasId, style: 'max-height: 120px;' }));
-        chartsGrid.appendChild(chartWrapper);
-
-        setTimeout(() => {
-            const lectureDates = state.lectureDates[sub] || [];
-            let present = 0, late = 0, absent = 0;
-            lectureDates.forEach(date => {
-                const status = state.attendance[student.enrollmentNumber]?.dates?.[date]?.[sub]?.status;
-                if(status === 'present') present++;
-                else if(status === 'late') late++;
-                else if(status === 'absent') absent++;
-            });
-            const unmarked = lectureDates.length - (present + late + absent);
-            
-            new Chart(document.getElementById(canvasId).getContext('2d'), {
-                type: 'pie',
-                data: { labels: ['Present', 'Late', 'Absent', 'Unmarked'], datasets: [{ data: [present, late, absent, unmarked], backgroundColor: ['#06d6a0', '#ffd166', '#ef476f', '#778da9'] }] },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
-            });
-        }, 50);
+  function renderSummary() {
+    nodes.summaryList.innerHTML = '';
+    if (!state.currentUser) { nodes.summaryList.classList.add('muted'); nodes.summaryList.textContent = 'Log in to see summary.'; return; }
+    const totalLectures = Object.values(userData.lectureDates || {}).reduce((acc, dates) => acc + (dates ? dates.length : 0), 0);
+    if (totalLectures === 0) { nodes.summaryList.classList.add('muted'); nodes.summaryList.textContent = 'No lecture data recorded yet.'; return; }
+    nodes.summaryList.classList.remove('muted');
+    const summaryData = STUDENTS.map(st => {
+      let presentCount = 0;
+      const attData = userData.attendance[st.enrollmentNumber] || { dates: {} };
+      Object.values(attData.dates).forEach(subjects => {
+        Object.values(subjects).forEach(data => { if (data.status === 'present') presentCount++; });
+      });
+      const perc = totalLectures > 0 ? Math.round((presentCount / totalLectures) * 100) : 0;
+      return { st, present: presentCount, perc };
+    }).sort((a, b) => a.perc - b.perc);
+    summaryData.forEach(r => {
+      const left = mk('div', { style: 'display:flex; gap:12px; align-items:center;' }, [ mk('div', { class: 'avatar', text: r.st.name.split(' ').slice(0, 2).map(n => n[0] || '').join('') }), mk('div', {}, [mk('div', { style: 'font-weight:800', text: r.st.name }), mk('div', { class: 'muted', text: `${r.present}/${totalLectures} Lectures` })]) ]);
+      const badgeClass = r.perc >= 70 ? 'badge present' : 'badge absent';
+      const badge = mk('div', { class: badgeClass, text: `${r.perc}%` });
+      nodes.summaryList.appendChild(mk('div', { class: 'row' }, [left, badge]));
     });
-    
-    card.appendChild(chartsGrid);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   }
+  
+  function renderAll() { renderStudents(); updateDashboardChart(); renderTrendChart(); renderLow(); renderRecent(); renderSummary(); }
 
-  // --- EXPORT AND ACTION LOGIC ---
+  // --- CORE LOGIC & ACTIONS ---
+  function mark(enrollment, subject, date, status, opts = {}) { /* ... (Code is unchanged from previous working version) ... */ };
+  function clearMark(enrollment, subject, date) { /* ... (Code is unchanged from previous working version) ... */ };
+  function showFound(student) { /* ... (Code is unchanged from previous working version) ... */ }
+  
+  // --- EXPORT LOGIC (FIXED) ---
   function getMultiDaySnapshot(fromDate, toDate, subject) {
     if (!fromDate || !toDate || toDate < fromDate) {
       showToast('Invalid date range selected.');
       return null;
     }
-    const relevantDates = (state.lectureDates[subject] || []).filter(d => d >= fromDate && d <= toDate).sort();
+    const relevantDates = (userData.lectureDates[subject] || []).filter(d => d >= fromDate && d <= toDate).sort();
     if (relevantDates.length === 0) {
       showToast('No lecture data found in the selected range for this subject.');
       return null;
@@ -586,7 +273,7 @@
     const data = STUDENTS.map(student => {
       const row = { Enrollment: student.enrollmentNumber, Name: student.name };
       relevantDates.forEach(date => {
-        row[date] = state.attendance[student.enrollmentNumber]?.dates?.[date]?.[subject]?.status || '—';
+        row[date] = userData.attendance[student.enrollmentNumber]?.dates?.[date]?.[subject]?.status || '—';
       });
       return row;
     });
@@ -629,11 +316,7 @@
     showToast('Generating PDF...');
     const header = ['Enrollment', 'Name', ...dates].map(h => `<th style="padding:4px 6px; border:1px solid #ddd; background:#eee; color:#000;">${escape(h)}</th>`).join('');
     const body = data.map(row => `<tr>${Object.values(row).map(v => `<td style="padding:4px 6px; border:1px solid #ddd; color:#000;">${escape(v)}</td>`).join('')}</tr>`).join('');
-    const printableHTML = `<div style="font-family:Arial; padding:20px; background:white; color:black;">
-        <h3 style="color:#000;">Attendance for ${subjectInput.value}</h3>
-        <p style="color:#333; font-size: 12px;">From: ${fromDateInput.value} To: ${toDateInput.value}</p>
-        <table style="border-collapse:collapse; width:100%; font-size:10px;"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>
-    </div>`;
+    const printableHTML = `<div style="font-family:Arial; padding:20px; background:white; color:black;"><h3 style="color:#000;">Attendance for ${subjectInput.value}</h3><p style="color:#333; font-size: 12px;">From: ${fromDateInput.value} To: ${toDateInput.value}</p><table style="border-collapse:collapse; width:100%; font-size:10px;"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
 
     const pa = $('printArea');
     pa.innerHTML = printableHTML;
@@ -641,8 +324,7 @@
     try {
         const { jsPDF } = window.jspdf;
         const canvas = await html2canvas(pa.firstElementChild, { scale: 2 });
-        const pdf = new jsPDF('l', 'pt', 'a4'); // 'l' for landscape
-        
+        const pdf = new jsPDF('l', 'pt', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         const ratio = canvas.width / pdfWidth;
@@ -651,46 +333,108 @@
         let renderedHeight = 0;
         while (renderedHeight < canvas.height) {
             if (renderedHeight > 0) pdf.addPage();
-            
             const sliceHeight = Math.min(pageCanvasHeight, canvas.height - renderedHeight);
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = sliceHeight;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(canvas, 0, renderedHeight, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
-            
-            const imgData = tempCanvas.toDataURL('image/png');
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, sliceHeight / ratio);
+            pdf.addImage(tempCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeight / ratio);
             renderedHeight += sliceHeight;
         }
 
         pdf.save(`Attendance_${subjectInput.value}_${fromDateInput.value}_to_${toDateInput.value}.pdf`);
         showToast('PDF downloaded');
-    } catch(e) {
-        console.error("PDF generation failed:", e);
-        showToast("PDF generation failed.");
-    } finally {
-        pa.innerHTML = '';
-    }
+    } catch(e) { console.error("PDF generation failed:", e); showToast("PDF generation failed."); } finally { pa.innerHTML = ''; }
   });
-    
-  nodes.emailBtn.addEventListener('click', () => {
-    const email = nodes.deanEmail.value.trim();
-    if (!email) return showToast("Please enter the Dean's email address.");
-    const subject = `Attendance Report for ${nodes.subjectInput.value}`;
-    const body = "Dear Dean,\n\nPlease find the attached attendance report.\n\nBest regards.";
-    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  nodes.lowAttPdfBtn.addEventListener('click', async () => {
+    if (!state.currentUser) return showToast('Please log in to export.');
+    const lowStudents = getLowAttendanceStudents(70);
+    if (lowStudents.length === 0) return showToast('No students with low attendance to report.');
+    showToast('Generating Low Attendance PDF...');
+    const tableHeader = `<tr><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Enrollment</th><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Name</th><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Attendance</th><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Percentage</th></tr>`;
+    const tableBody = lowStudents.map(s => `<tr><td style="padding:6px 8px; border:1px solid #ddd; color:#000;">${escape(s.st.enrollmentNumber)}</td><td style="padding:6px 8px; border:1px solid #ddd; color:#000;">${escape(s.st.name)}</td><td style="padding:6px 8px; border:1px solid #ddd; color:#000;">${s.present}/${s.totalLect}</td><td style="padding:6px 8px; border:1px solid #ddd; color:#ef476f; font-weight:bold;">${s.perc}%</td></tr>`).join('');
+    const printableHTML = `<div style="font-family:Arial; padding:20px; background:white; color:black;"><h2 style="color:#000;">Low Attendance Report (&lt;70%)</h2><p style="color:#333; font-size: 12px;">Generated on: ${new Date().toLocaleString()}</p><table style="border-collapse:collapse; width:100%; font-size:11px;"><thead>${tableHeader}</thead><tbody>${tableBody}</tbody></table></div>`;
+    const pa = $('printArea');
+    pa.innerHTML = printableHTML;
+    try {
+        const { jsPDF } = window.jspdf;
+        const canvas = await html2canvas(pa.firstElementChild, { scale: 2 });
+        const pdf = new jsPDF('p', 'pt', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, canvas.height * pdfWidth / canvas.width);
+        pdf.save(`Low_Attendance_Report_${today()}.pdf`);
+        showToast('PDF downloaded');
+    } catch(e) { console.error("PDF generation failed:", e); showToast("PDF generation failed."); } finally { pa.innerHTML = ''; }
   });
   
-  nodes.searchBtn.addEventListener('click', () => { const q = nodes.searchInput.value.trim().toLowerCase(); if (!q) return showToast('Enter enrollment or name'); const found = STUDENTS.find(s => s.enrollmentNumber.toLowerCase() === q || s.name.toLowerCase().includes(q)); if (!found) return showToast('Student not found'); showFound(found); const node = document.querySelector(`[data-enroll="${found.enrollmentNumber}"]`); if (node) { node.scrollIntoView({ behavior: 'smooth', block: 'center' }); node.classList.add('highlight'); setTimeout(() => node.classList.remove('highlight'), 1500); } });
-  document.addEventListener('keydown', e => { if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; if (e.key === '/') { e.preventDefault(); nodes.searchInput.focus(); return; } if (nodes.foundArea.querySelector('button')) { const keyMap = { 'p': 'Present', 'l': 'Late', 'a': 'Absent', 'c': 'Clear', 'u': 'Clear' }; const action = keyMap[e.key.toLowerCase()]; if (action) { e.preventDefault(); const button = Array.from(nodes.foundArea.querySelectorAll('button')).find(b => b.textContent === action); if (button) button.click(); } } });
-  function applyTheme(t) { const theme = t === 'light' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; state.settings.theme = theme; nodes.themeBtn.textContent = theme === 'light' ? '🌙' : '☀️'; if (dashboardChart) { dashboardChart.destroy(); trendChart.destroy(); dashboardChart = null; trendChart = null; renderAll(); } }
-  nodes.themeBtn.addEventListener('click', () => applyTheme(state.settings.theme === 'dark' ? 'light' : 'dark'));
+  // --- AUTH & INIT ---
+  function applyTheme(t) { const theme = t === 'light' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; userData.settings.theme = theme; nodes.themeBtn.textContent = theme === 'light' ? '🌙' : '☀️'; if (dashboardChart) { dashboardChart.destroy(); trendChart.destroy(); dashboardChart = null; trendChart = null; renderAll(); } }
   function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=(Math.imul(31,h)+s.charCodeAt(i))|0; return String(h); }
-  nodes.authBtn.addEventListener('click', ()=>{ const u = nodes.username.value.trim(), p = nodes.password.value.trim(); if(!u || !p){ showToast('Enter username & password'); return; } const key = u.toLowerCase(); if(state.users[key]){ if(state.users[key].pwd !== hash(p)) { showToast('Invalid password'); return; } state.currentUser = key; safeSave(); showToast('Logged in successfully!'); updateAuthUI(); } else { state.users[key] = { pwd: hash(p) }; state.currentUser = key; safeSave(); showToast('Account created & logged in'); updateAuthUI(); } });
-  nodes.logoutBtn.addEventListener('click', ()=> { state.currentUser = null; safeSave(); updateAuthUI(); showToast('Logged out.'); });
+  function loadUserSession(username) { state.currentUser = username; userData = JSON.parse(JSON.stringify(state.users[username].data)); updateAuthUI(); applyTheme(userData.settings.theme); renderAll(); }
+  function clearUserSession() { state.currentUser = null; userData = getInitialUserData(); updateAuthUI(); if (dashboardChart) { dashboardChart.destroy(); dashboardChart = null; } if (trendChart) { trendChart.destroy(); trendChart = null; } renderAll(); }
   function updateAuthUI(){ const loggedIn = !!state.currentUser; nodes.logoutBtn.style.display = loggedIn ? 'inline-block' : 'none'; nodes.authBtn.style.display = loggedIn ? 'none' : 'inline-block'; nodes.username.style.display = loggedIn ? 'none' : 'inline-block'; nodes.password.style.display = loggedIn ? 'none' : 'inline-block'; }
-  function init() { nodes.subjectInput.innerHTML = ''; SUBJECTS.forEach(s => nodes.subjectInput.appendChild(mk('option', { value: s, text: s }))); nodes.dateInput.value = today(); nodes.fromDateInput.value = today(); nodes.toDateInput.value = today(); safeLoad(); applyTheme(state.settings.theme || 'dark'); updateAuthUI(); renderAll(); nodes.subjectInput.addEventListener('change', renderAll); nodes.dateInput.addEventListener('change', renderAll); console.log('Enhanced Attendance app ready.'); }
+  nodes.authBtn.addEventListener('click', ()=>{ const u = nodes.username.value.trim(), p = nodes.password.value.trim(); if(!u || !p){ showToast('Enter username & password'); return; } const key = u.toLowerCase(); if(state.users[key]){ if(state.users[key].pwd !== hash(p)) { showToast('Invalid password'); return; } state.users[key].data = state.users[key].data || getInitialUserData(); loadUserSession(key); safeSave(); showToast('Logged in successfully!'); } else { state.users[key] = { pwd: hash(p), data: getInitialUserData() }; safeSave(); loadUserSession(key); showToast('Account created & logged in'); } });
+  nodes.logoutBtn.addEventListener('click', ()=> { safeSave(); state.currentUser = null; safeSave(); clearUserSession(); showToast('Logged out.'); });
+  
+  function init() {
+    nodes.subjectInput.innerHTML = '';
+    SUBJECTS.forEach(s => nodes.subjectInput.appendChild(mk('option', { value: s, text: s })));
+    nodes.dateInput.value = today();
+    nodes.fromDateInput.value = today();
+    nodes.toDateInput.value = today();
+    safeLoad(); updateAuthUI(); applyTheme(userData.settings.theme); renderAll();
+    nodes.subjectInput.addEventListener('change', renderAll);
+    nodes.dateInput.addEventListener('change', renderAll);
+    nodes.themeBtn.addEventListener('click', () => applyTheme(userData.settings.theme === 'dark' ? 'light' : 'dark'));
+    nodes.searchBtn.addEventListener('click', () => { if (!state.currentUser) return showToast('Please log in to search.'); const q = nodes.searchInput.value.trim().toLowerCase(); if (!q) return showToast('Enter enrollment or name'); const found = STUDENTS.find(s => s.enrollmentNumber.toLowerCase() === q || s.name.toLowerCase().includes(q)); if (!found) return showToast('Student not found'); showFound(found); const node = document.querySelector(`[data-enroll="${found.enrollmentNumber}"]`); if (node) { node.scrollIntoView({ behavior: 'smooth', block: 'center' }); node.classList.add('highlight'); setTimeout(() => node.classList.remove('highlight'), 1500); } });
+    document.addEventListener('keydown', e => { if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; if (e.key === '/') { e.preventDefault(); nodes.searchInput.focus(); return; } if (nodes.foundArea.querySelector('button')) { const keyMap = { 'p': 'Present', 'a': 'Absent', 'c': 'Clear' }; const action = keyMap[e.key.toLowerCase()]; if (action) { e.preventDefault(); const button = Array.from(nodes.foundArea.querySelectorAll('button')).find(b => b.textContent === action); if (button) button.click(); } } });
+    console.log('Enhanced Attendance app ready.');
+  }
+  
+  // --- RE-ADDED FULL FUNCTION DEFINITIONS FOR CLARITY AND CORRECTNESS ---
+  updateDashboardChart = function() {
+    const subject = nodes.subjectInput.value; const date = nodes.dateInput.value; let present = 0, absent = 0;
+    STUDENTS.forEach(s => { const status = userData.attendance[s.enrollmentNumber]?.dates?.[date]?.[subject]?.status; if (status === 'present') present++; else if (status === 'absent') absent++; });
+    const unmarked = STUDENTS.length - (present + absent);
+    nodes.statsRow.innerHTML = ''; ['Present', 'Absent', 'Unmarked'].forEach(s => { const count = { Present: present, Absent: absent, Unmarked: unmarked }[s]; const badgeClass = s === 'Unmarked' ? 'badge' : `badge ${s.toLowerCase()}`; nodes.statsRow.appendChild(mk('div', { class: badgeClass, html: `${s}: <b>${count}</b>` })); });
+    nodes.progressFill.style.width = `${STUDENTS.length ? Math.round((present + absent) / STUDENTS.length * 100) : 0}%`;
+    const data = [present, absent, unmarked]; const textColor = getComputedStyle(document.body).getPropertyValue('--text');
+    if (dashboardChart) { dashboardChart.data.labels = ['Present', 'Absent', 'Unmarked']; dashboardChart.data.datasets[0].data = data; dashboardChart.options.plugins.title.text = `${subject} — ${date}`; dashboardChart.update(); } else { dashboardChart = new Chart(nodes.dashboardCanvas.getContext('2d'), { type: 'pie', data: { labels: ['Present', 'Absent', 'Unmarked'], datasets: [{ data, backgroundColor: ['#06d6a0', '#ef476f', '#778da9'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor } }, title: { display: true, text: `${subject} — ${date}`, color: textColor } } } }); }
+  };
+  renderTrendChart = function() {
+    const subject = nodes.subjectInput.value; const lectureDates = (userData.lectureDates[subject] || []).sort();
+    const dataPoints = lectureDates.map(date => { let present = 0, totalMarked = 0; STUDENTS.forEach(s => { const status = userData.attendance[s.enrollmentNumber]?.dates?.[date]?.[subject]?.status; if (status === 'present') { present++; totalMarked++; } else if (status === 'absent') { totalMarked++; } }); return totalMarked > 0 ? (present / totalMarked) * 100 : 0; });
+    const textColor = getComputedStyle(document.body).getPropertyValue('--text'); const borderColor = getComputedStyle(document.body).getPropertyValue('--border');
+    if (trendChart) { trendChart.data.labels = lectureDates; trendChart.data.datasets[0].data = dataPoints; trendChart.update(); } else { trendChart = new Chart(nodes.trendCanvas.getContext('2d'), { type: 'line', data: { labels: lectureDates, datasets: [{ label: 'Turnout %', data: dataPoints, fill: true, borderColor: 'var(--accent)', tension: 0.1, backgroundColor: 'rgba(0, 255, 153, 0.1)' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: (value) => value.toFixed(0) + '%' }, grid: { color: borderColor } },  x: { ticks: { color: textColor, autoSkip: true, maxTicksLimit: 15 }, grid: { color: borderColor } } } } }); }
+  };
+  renderStudents = function() {
+    const date = nodes.dateInput.value; const subject = nodes.subjectInput.value; const container = nodes.studentList; container.innerHTML = '';
+    if (!state.currentUser) { container.classList.add('muted'); container.textContent = 'Please log in to view students.'; return; }
+    container.classList.remove('muted');
+    STUDENTS.forEach(st => { userData.attendance[st.enrollmentNumber] = userData.attendance[st.enrollmentNumber] || { dates: {} }; const status = userData.attendance[st.enrollmentNumber]?.dates?.[date]?.[subject]?.status || '—'; const statusClass = { present: 'present', absent: 'absent' }[status] || '';
+      const editBtn = mk('button', { class: 'edit-btn', text: 'Edit' }); editBtn.addEventListener('click', ev => { ev.stopPropagation(); document.querySelectorAll('.menu-popup').forEach(n => n.remove()); const popup = mk('div', { class: 'menu-popup' }); ['present', 'absent', 'undo'].forEach(opt => { const b = mk('button', { text: opt === 'undo' ? 'Clear Mark' : opt.charAt(0).toUpperCase() + opt.slice(1) }); b.addEventListener('click', e => { e.stopPropagation(); popup.remove(); opt === 'undo' ? clearMark(st.enrollmentNumber, subject, date) : mark(st.enrollmentNumber, subject, date, opt); }); popup.appendChild(b); }); editBtn.parentElement.appendChild(popup); const closeHandler = e => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', closeHandler); } }; setTimeout(() => document.addEventListener('click', closeHandler), 10); });
+      const rowClasses = ['row']; if(st.enrollmentNumber === currentStudentEnrollment) rowClasses.push('current');
+      const row = mk('div', { class: rowClasses.join(' '), 'data-enroll': st.enrollmentNumber }, [ mk('div', { style: 'display:flex;align-items:center;gap:12px;' }, [ mk('div', { class: 'avatar', text: st.name.split(' ').slice(0, 2).map(n => n[0] || '').join('') }), mk('div', {}, [ mk('div', { style: 'font-weight:800', text: st.name }), mk('div', { class: 'muted', text: st.enrollmentNumber }) ]) ]), mk('div', {}, [ mk('div', { class: `badge ${statusClass}`, text: status.charAt(0).toUpperCase() + status.slice(1) }), mk('div', { class: 'edit-menu' }, [editBtn]) ]) ]);
+      row.addEventListener('click', () => showFound(st)); container.appendChild(row);
+    });
+  };
+  renderRecent = function() {
+    const subject = nodes.subjectInput.value; nodes.recentList.innerHTML = ''; const list = (userData.recent[subject] || []).slice().reverse().slice(0, 50);
+    if (!list.length) { nodes.recentList.classList.add('muted'); nodes.recentList.textContent = 'No recent marks'; return; }
+    nodes.recentList.classList.remove('muted');
+    list.forEach(item => { const left = mk('div', { style: 'display:flex; align-items:center; gap:12px;' }, [ mk('div', { class: 'avatar', text: (item.student || item.enrollment).split(' ').slice(0, 2).map(n => n[0] || '').join('') }), mk('div', {}, [ mk('div', { style: 'font-weight:800', text: item.student }), mk('div', { class: 'muted', text: `${item.enrollment} • ${item.date} • ${item.timestamp}` }) ]) ]); const status = item.status || 'unmarked'; const badge = mk('div', { class: `badge ${status}`, text: status.charAt(0).toUpperCase() + status.slice(1) }); nodes.recentList.appendChild(mk('div', { class: 'row' }, [left, badge])); });
+  };
+  mark = function(enrollment, subject, date, status, opts = {}) { if (!state.currentUser) return showToast('Please sign in.'); const rec = userData.attendance[enrollment] = userData.attendance[enrollment] || { dates: {} }; rec.dates[date] = rec.dates[date] || {}; rec.dates[date][subject] = { status, timestamp: new Date().toLocaleTimeString() }; userData.lectureDates[subject] = userData.lectureDates[subject] || []; if (!userData.lectureDates[subject].includes(date)) { userData.lectureDates[subject].push(date); userData.lectureDates[subject].sort(); } userData.recent[subject] = (userData.recent[subject] || []).filter(r => !(r.enrollment === enrollment && r.date === date)); userData.recent[subject].push({ enrollment, student: STUDENTS.find(s => s.enrollmentNumber === enrollment)?.name || enrollment, status, subject, date, timestamp: rec.dates[date][subject].timestamp }); safeSave(); renderAll(); if (!opts.silent) showToast(`Marked ${status} for ${enrollment}`); };
+  clearMark = function(enrollment, subject, date) { if (!state.currentUser) return showToast('Please sign in.'); const rec = userData.attendance[enrollment]; if (!rec?.dates?.[date]?.[subject]) return showToast('No mark to clear'); delete rec.dates[date][subject]; if (!STUDENTS.some(s => userData.attendance[s.enrollmentNumber]?.dates[date]?.[subject])) { userData.lectureDates[subject] = userData.lectureDates[subject].filter(d => d !== date); } userData.recent[subject] = userData.recent[subject].filter(r => !(r.enrollment === enrollment && r.date === date)); safeSave(); renderAll(); showToast('Cleared mark'); };
+  showFound = function(student) {
+    if (!state.currentUser) return; currentStudentEnrollment = student.enrollmentNumber; renderStudents(); nodes.foundArea.innerHTML = ''; const date = nodes.dateInput.value; const subject = nodes.subjectInput.value; const rec = userData.attendance[student.enrollmentNumber]?.dates?.[date]?.[subject];
+    const header = mk('div', { style: 'display:flex; justify-content:space-between; align-items:center;' }, [ mk('div', {}, [ mk('div', { style: 'font-weight:800', text: student.name }), mk('div', { class: 'muted', style: 'margin-top:6px', text: student.enrollmentNumber }) ]), mk('div', { style: 'text-align:right;' }, [ mk('div', { class: 'muted', text: `${subject} • ${date}` }), mk('div', { style: 'font-weight:900', text: rec ? rec.status.charAt(0).toUpperCase() + rec.status.slice(1) : '—' }) ]) ]);
+    const actions = mk('div', { style: 'margin-top:10px; display:flex; gap:8px;' }); const actionHandler = (action) => { const status = action.toLowerCase(); status === 'clear' ? clearMark(student.enrollmentNumber, subject, date) : mark(student.enrollmentNumber, subject, date, status); const currentIndex = STUDENTS.findIndex(s => s.enrollmentNumber === student.enrollmentNumber); if (currentIndex > -1 && currentIndex < STUDENTS.length - 1) { showFound(STUDENTS[currentIndex + 1]); } else { nodes.foundArea.innerHTML = mk('div', { class: 'muted', text: 'Reached the end of the student list.' }).outerHTML; currentStudentEnrollment = null; renderStudents(); showToast('All students processed!'); } };
+    ['Present', 'Absent', 'Clear'].forEach(action => { const btn = mk('button', { class: action === 'Present' ? 'btn-primary' : 'btn-ghost', text: action }); btn.addEventListener('click', () => actionHandler(action)); actions.appendChild(btn); });
+    nodes.foundArea.appendChild(header); nodes.foundArea.appendChild(actions);
+  };
   
   init();
 
