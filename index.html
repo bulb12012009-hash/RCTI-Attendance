@@ -1,16 +1,54 @@
-<!doctype html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>R.C Technical Institute — CO11 Attendance (Corrected Exports)</title>
-
 <!-- Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
 <style>
   :root{
     --bg:#0d1b2a; --card:#10263a; --accent:#00ff99; --text:#e6eef6; --muted:#93a7bf; --border:rgba(0,255,153,0.08);
@@ -77,7 +115,6 @@
         <button id="themeBtn" class="btn-ghost">🌙</button>
       </div>
     </header>
-
     <div class="layout">
       <div>
         <div class="card">
@@ -85,94 +122,73 @@
           <div id="statsRow" style="display:flex;gap:8px;align-items:center;margin-bottom:8px; flex-wrap:wrap;"></div>
           <canvas id="dashboardCanvas"></canvas>
         </div>
-
         <div style="height:12px"></div>
-        
         <div class="card">
-            <div class="card-header"><div class="title">🎓 Overall Summary</div><div class="muted">All subjects, all time</div></div>
-            <div id="summaryList" style="max-height:300px;overflow:auto" class="muted">Log in to see summary.</div>
+          <div class="card-header"><div class="title">🎓 Overall Summary</div><div class="muted">All subjects, all time</div></div>
+          <div id="summaryList" style="max-height:300px;overflow:auto" class="muted">Log in to see summary.</div>
         </div>
-
         <div style="height:12px"></div>
-
         <div class="card">
-            <div class="card-header"><div class="title">📈 Attendance Trend</div><div class="muted">History for selected subject</div></div>
-            <canvas id="trendCanvas" style="max-height:150px;"></canvas>
+          <div class="card-header"><div class="title">📈 Attendance Trend</div><div class="muted">History for selected subject</div></div>
+          <canvas id="trendCanvas" style="max-height:150px;"></canvas>
         </div>
-
         <div style="height:12px"></div>
-
         <div class="card">
           <div class="card-header"><div class="title">🔎 Mark Attendance</div><div class="muted">Click student or search</div></div>
           <div class="progress"><div id="progressFill" class="progress-fill"></div></div>
-
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px" class="controls">
             <input id="dateInput" type="date" class="input" style="width:140px" />
             <select id="subjectInput" class="input" style="width:170px"></select>
             <input id="searchInput" class="input" placeholder="enroll or name... (/)" style="flex:1" />
             <button id="searchBtn" class="btn-primary">Search</button>
           </div>
-
           <div id="foundArea" class="found muted">Select a student to begin marking. Use <span class="kbd">P</span>, <span class="kbd">A</span>, <span class="kbd">C</span> for quick marking.</div>
         </div>
-          
         <div style="height:12px"></div>
-
         <div class="card">
           <div class="card-header"><div class="title">📤 Export & Actions</div></div>
-            
           <div class="controls">
             <input id="deanEmail" class="input" placeholder="Dean email" style="flex:1" />
             <button id="emailBtn" class="btn-primary">Email Dean</button>
           </div>
-          
           <div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;">
             <div class="muted" style="margin-bottom: 8px;">Export Range (for selected subject):</div>
             <div class="controls">
-                <input id="fromDateInput" type="date" class="input" />
-                <span class="muted">to</span>
-                <input id="toDateInput" type="date" class="input" />
+              <input id="fromDateInput" type="date" class="input" />
+              <span class="muted">to</span>
+              <input id="toDateInput" type="date" class="input" />
             </div>
             <div class="controls" style="margin-top: 8px;">
-                <button id="pdfBtn" class="btn-ghost">⬇️ PDF</button>
-                <button id="csvBtn" class="btn-ghost">CSV</button>
-                <button id="xlsxBtn" class="btn-ghost">Excel</button>
-                <button id="lowAttPdfBtn" class="btn-ghost">⬇️ Low Att. PDF</button>
-                <input type="file" id="importCsv" accept=".csv" style="display:none" />
-                <label for="importCsv" class="btn-ghost" style="cursor:pointer">📥 Import</label>
+              <button id="pdfBtn" class="btn-ghost">⬇️ PDF</button>
+              <button id="csvBtn" class="btn-ghost">CSV</button>
+              <button id="xlsxBtn" class="btn-ghost">Excel</button>
+              <button id="lowAttPdfBtn" class="btn-ghost">⬇️ Low Att. PDF</button>
+              <input type="file" id="importCsv" accept=".csv" style="display:none" />
+              <label for="importCsv" class="btn-ghost" style="cursor:pointer">📥 Import</label>
             </div>
           </div>
         </div>
       </div>
-
       <div>
         <div class="card">
           <div class="card-header"><div class="title">📋 Students</div><div class="muted">Click to mark • Dbl-click for details</div></div>
           <div class="master-scroll" id="studentList"></div>
         </div>
-
         <div style="height:12px"></div>
-
         <div class="card">
           <div class="card-header"><div class="title">📉 Low Attendance (&lt;70%)</div><div class="muted" id="lowAttStatus">Auto-refreshes</div></div>
           <div id="lowList" style="max-height:300px;overflow:auto" class="muted">No students below 70%</div>
         </div>
-        
         <div style="height:12px"></div>
-
         <div class="card">
           <div class="card-header"><div class="title">🕒 Recent Marks</div><div class="muted">Latest 50 actions</div></div>
           <div id="recentList" style="max-height:260px;overflow:auto" class="muted">No recent marks</div>
         </div>
       </div>
     </div>
-
     <footer>Built for R.C Technical Institute • Full edit & live dashboard</footer>
   </div>
-
-  <div id="printArea" style="position:fixed;left:-9999px;top:-9999px;"></div>
   <div id="toastWrap" aria-live="polite"></div>
-
 <script>
 (function(){
   'use strict';
@@ -198,11 +214,6 @@
   let trendChart = null;
 
   // --- RENDER FUNCTIONS ---
-  function updateDashboardChart() { /* ... (Code is unchanged from previous working version) ... */ }
-  function renderTrendChart() { /* ... (Code is unchanged from previous working version) ... */ }
-  function renderStudents() { /* ... (Code is unchanged from previous working version) ... */ }
-  function renderRecent() { /* ... (Code is unchanged from previous working version) ... */ }
-  
   function getLowAttendanceStudents(threshold = 70) {
     const totalLectures = Object.values(userData.lectureDates || {}).reduce((acc, dates) => acc + (dates ? dates.length : 0), 0);
     if (totalLectures === 0) return [];
@@ -254,12 +265,7 @@
   
   function renderAll() { renderStudents(); updateDashboardChart(); renderTrendChart(); renderLow(); renderRecent(); renderSummary(); }
 
-  // --- CORE LOGIC & ACTIONS ---
-  function mark(enrollment, subject, date, status, opts = {}) { /* ... (Code is unchanged from previous working version) ... */ };
-  function clearMark(enrollment, subject, date) { /* ... (Code is unchanged from previous working version) ... */ };
-  function showFound(student) { /* ... (Code is unchanged from previous working version) ... */ }
-  
-  // --- EXPORT LOGIC (FIXED) ---
+  // --- EXPORT LOGIC (CORRECTED) ---
   function getMultiDaySnapshot(fromDate, toDate, subject) {
     if (!fromDate || !toDate || toDate < fromDate) {
       showToast('Invalid date range selected.');
@@ -273,7 +279,7 @@
     const data = STUDENTS.map(student => {
       const row = { Enrollment: student.enrollmentNumber, Name: student.name };
       relevantDates.forEach(date => {
-        row[date] = userData.attendance[student.enrollmentNumber]?.dates?.[date]?.[subject]?.status || '—';
+        row[date] = userData.attendance[student.enrollmentNumber]?.dates?.[date]?.[subject]?.status?.charAt(0).toUpperCase() || '—';
       });
       return row;
     });
@@ -307,69 +313,109 @@
     showToast('Excel downloaded');
   });
     
-  nodes.pdfBtn.addEventListener('click', async () => {
+  nodes.pdfBtn.addEventListener('click', () => {
     const { fromDateInput, toDateInput, subjectInput } = nodes;
     const snapshot = getMultiDaySnapshot(fromDateInput.value, toDateInput.value, subjectInput.value);
     if (!snapshot) return;
-    const { data, dates } = snapshot;
     
     showToast('Generating PDF...');
-    const header = ['Enrollment', 'Name', ...dates].map(h => `<th style="padding:4px 6px; border:1px solid #ddd; background:#eee; color:#000;">${escape(h)}</th>`).join('');
-    const body = data.map(row => `<tr>${Object.values(row).map(v => `<td style="padding:4px 6px; border:1px solid #ddd; color:#000;">${escape(v)}</td>`).join('')}</tr>`).join('');
-    const printableHTML = `<div style="font-family:Arial; padding:20px; background:white; color:black;"><h3 style="color:#000;">Attendance for ${subjectInput.value}</h3><p style="color:#333; font-size: 12px;">From: ${fromDateInput.value} To: ${toDateInput.value}</p><table style="border-collapse:collapse; width:100%; font-size:10px;"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
+    const { data, dates } = snapshot;
 
-    const pa = $('printArea');
-    pa.innerHTML = printableHTML;
-    
     try {
         const { jsPDF } = window.jspdf;
-        const canvas = await html2canvas(pa.firstElementChild, { scale: 2 });
-        const pdf = new jsPDF('l', 'pt', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const ratio = canvas.width / pdfWidth;
-        const pageCanvasHeight = pdfHeight * ratio;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
         
-        let renderedHeight = 0;
-        while (renderedHeight < canvas.height) {
-            if (renderedHeight > 0) pdf.addPage();
-            const sliceHeight = Math.min(pageCanvasHeight, canvas.height - renderedHeight);
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = sliceHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(canvas, 0, renderedHeight, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
-            pdf.addImage(tempCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeight / ratio);
-            renderedHeight += sliceHeight;
-        }
+        doc.setFontSize(16);
+        doc.text(`Attendance for ${subjectInput.value}`, 40, 40);
+        doc.setFontSize(10);
+        doc.text(`From: ${fromDateInput.value} To: ${toDateInput.value}`, 40, 55);
 
-        pdf.save(`Attendance_${subjectInput.value}_${fromDateInput.value}_to_${toDateInput.value}.pdf`);
+        const head = [['Enrollment', 'Name', ...dates]];
+        const body = data.map(row => Object.values(row));
+        
+        doc.autoTable({
+            startY: 70,
+            head: head,
+            body: body,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [22, 160, 133], textColor: [255, 255, 255], fontStyle: 'bold' },
+            columnStyles: {
+                0: { cellWidth: 80 },
+                1: { cellWidth: 120 },
+            },
+            margin: { top: 70, left: 40, right: 40 },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index >= 2) {
+                    data.cell.styles.textColor = data.cell.text[0] === 'Present' ? [6, 214, 160] : data.cell.text[0] === 'Absent' ? [239, 71, 111] : [100, 100, 100];
+                }
+            }
+        });
+
+        doc.save(`Attendance_${subjectInput.value}_${fromDateInput.value}_to_${toDateInput.value}.pdf`);
         showToast('PDF downloaded');
-    } catch(e) { console.error("PDF generation failed:", e); showToast("PDF generation failed."); } finally { pa.innerHTML = ''; }
+    } catch(e) { 
+        console.error("PDF generation failed:", e); 
+        showToast("PDF generation failed. Please try again.");
+    }
   });
 
-  nodes.lowAttPdfBtn.addEventListener('click', async () => {
+  nodes.lowAttPdfBtn.addEventListener('click', () => {
     if (!state.currentUser) return showToast('Please log in to export.');
     const lowStudents = getLowAttendanceStudents(70);
     if (lowStudents.length === 0) return showToast('No students with low attendance to report.');
+    
     showToast('Generating Low Attendance PDF...');
-    const tableHeader = `<tr><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Enrollment</th><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Name</th><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Attendance</th><th style="padding:6px 8px; border:1px solid #ddd; background:#eee; color:#000;">Percentage</th></tr>`;
-    const tableBody = lowStudents.map(s => `<tr><td style="padding:6px 8px; border:1px solid #ddd; color:#000;">${escape(s.st.enrollmentNumber)}</td><td style="padding:6px 8px; border:1px solid #ddd; color:#000;">${escape(s.st.name)}</td><td style="padding:6px 8px; border:1px solid #ddd; color:#000;">${s.present}/${s.totalLect}</td><td style="padding:6px 8px; border:1px solid #ddd; color:#ef476f; font-weight:bold;">${s.perc}%</td></tr>`).join('');
-    const printableHTML = `<div style="font-family:Arial; padding:20px; background:white; color:black;"><h2 style="color:#000;">Low Attendance Report (&lt;70%)</h2><p style="color:#333; font-size: 12px;">Generated on: ${new Date().toLocaleString()}</p><table style="border-collapse:collapse; width:100%; font-size:11px;"><thead>${tableHeader}</thead><tbody>${tableBody}</tbody></table></div>`;
-    const pa = $('printArea');
-    pa.innerHTML = printableHTML;
+
     try {
         const { jsPDF } = window.jspdf;
-        const canvas = await html2canvas(pa.firstElementChild, { scale: 2 });
-        const pdf = new jsPDF('p', 'pt', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, canvas.height * pdfWidth / canvas.width);
-        pdf.save(`Low_Attendance_Report_${today()}.pdf`);
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
+        doc.setFontSize(18);
+        doc.text('Low Attendance Report (<70%)', 40, 40);
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Generated on: ${new Date().toLocaleString()}`, 40, 55);
+
+        const head = [['Enrollment', 'Name', 'Attendance', 'Percentage']];
+        const body = lowStudents.map(s => [
+            s.st.enrollmentNumber,
+            s.st.name,
+            `${s.present}/${s.totalLect}`,
+            `${s.perc}%`
+        ]);
+
+        doc.autoTable({
+            startY: 75,
+            head: head,
+            body: body,
+            theme: 'striped',
+            styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+            headStyles: { fillColor: [200, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+            columnStyles: {
+                0: { cellWidth: 80 },
+                1: { cellWidth: 200 },
+                2: { cellWidth: 80 },
+                3: { cellWidth: 60 }
+            },
+            margin: { top: 75, left: 40, right: 40 },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 3) {
+                    data.cell.styles.textColor = [239, 71, 111];
+                    data.cell.styles.fontStyle = 'bold';
+                }
+            }
+        });
+
+        doc.save(`Low_Attendance_Report_${today()}.pdf`);
         showToast('PDF downloaded');
-    } catch(e) { console.error("PDF generation failed:", e); showToast("PDF generation failed."); } finally { pa.innerHTML = ''; }
+    } catch(e) { 
+        console.error("PDF generation failed:", e); 
+        showToast("PDF generation failed. Please try again.");
+    }
   });
   
-  // --- AUTH & INIT ---
+  // --- AUTH & INIT (and other functions, unchanged) ---
   function applyTheme(t) { const theme = t === 'light' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; userData.settings.theme = theme; nodes.themeBtn.textContent = theme === 'light' ? '🌙' : '☀️'; if (dashboardChart) { dashboardChart.destroy(); trendChart.destroy(); dashboardChart = null; trendChart = null; renderAll(); } }
   function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=(Math.imul(31,h)+s.charCodeAt(i))|0; return String(h); }
   function loadUserSession(username) { state.currentUser = username; userData = JSON.parse(JSON.stringify(state.users[username].data)); updateAuthUI(); applyTheme(userData.settings.theme); renderAll(); }
@@ -394,7 +440,7 @@
   }
   
   // --- RE-ADDED FULL FUNCTION DEFINITIONS FOR CLARITY AND CORRECTNESS ---
-  updateDashboardChart = function() {
+  let updateDashboardChart = function() {
     const subject = nodes.subjectInput.value; const date = nodes.dateInput.value; let present = 0, absent = 0;
     STUDENTS.forEach(s => { const status = userData.attendance[s.enrollmentNumber]?.dates?.[date]?.[subject]?.status; if (status === 'present') present++; else if (status === 'absent') absent++; });
     const unmarked = STUDENTS.length - (present + absent);
@@ -403,13 +449,13 @@
     const data = [present, absent, unmarked]; const textColor = getComputedStyle(document.body).getPropertyValue('--text');
     if (dashboardChart) { dashboardChart.data.labels = ['Present', 'Absent', 'Unmarked']; dashboardChart.data.datasets[0].data = data; dashboardChart.options.plugins.title.text = `${subject} — ${date}`; dashboardChart.update(); } else { dashboardChart = new Chart(nodes.dashboardCanvas.getContext('2d'), { type: 'pie', data: { labels: ['Present', 'Absent', 'Unmarked'], datasets: [{ data, backgroundColor: ['#06d6a0', '#ef476f', '#778da9'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor } }, title: { display: true, text: `${subject} — ${date}`, color: textColor } } } }); }
   };
-  renderTrendChart = function() {
+  let renderTrendChart = function() {
     const subject = nodes.subjectInput.value; const lectureDates = (userData.lectureDates[subject] || []).sort();
     const dataPoints = lectureDates.map(date => { let present = 0, totalMarked = 0; STUDENTS.forEach(s => { const status = userData.attendance[s.enrollmentNumber]?.dates?.[date]?.[subject]?.status; if (status === 'present') { present++; totalMarked++; } else if (status === 'absent') { totalMarked++; } }); return totalMarked > 0 ? (present / totalMarked) * 100 : 0; });
     const textColor = getComputedStyle(document.body).getPropertyValue('--text'); const borderColor = getComputedStyle(document.body).getPropertyValue('--border');
     if (trendChart) { trendChart.data.labels = lectureDates; trendChart.data.datasets[0].data = dataPoints; trendChart.update(); } else { trendChart = new Chart(nodes.trendCanvas.getContext('2d'), { type: 'line', data: { labels: lectureDates, datasets: [{ label: 'Turnout %', data: dataPoints, fill: true, borderColor: 'var(--accent)', tension: 0.1, backgroundColor: 'rgba(0, 255, 153, 0.1)' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: (value) => value.toFixed(0) + '%' }, grid: { color: borderColor } },  x: { ticks: { color: textColor, autoSkip: true, maxTicksLimit: 15 }, grid: { color: borderColor } } } } }); }
   };
-  renderStudents = function() {
+  let renderStudents = function() {
     const date = nodes.dateInput.value; const subject = nodes.subjectInput.value; const container = nodes.studentList; container.innerHTML = '';
     if (!state.currentUser) { container.classList.add('muted'); container.textContent = 'Please log in to view students.'; return; }
     container.classList.remove('muted');
@@ -420,15 +466,15 @@
       row.addEventListener('click', () => showFound(st)); container.appendChild(row);
     });
   };
-  renderRecent = function() {
+  let renderRecent = function() {
     const subject = nodes.subjectInput.value; nodes.recentList.innerHTML = ''; const list = (userData.recent[subject] || []).slice().reverse().slice(0, 50);
     if (!list.length) { nodes.recentList.classList.add('muted'); nodes.recentList.textContent = 'No recent marks'; return; }
     nodes.recentList.classList.remove('muted');
     list.forEach(item => { const left = mk('div', { style: 'display:flex; align-items:center; gap:12px;' }, [ mk('div', { class: 'avatar', text: (item.student || item.enrollment).split(' ').slice(0, 2).map(n => n[0] || '').join('') }), mk('div', {}, [ mk('div', { style: 'font-weight:800', text: item.student }), mk('div', { class: 'muted', text: `${item.enrollment} • ${item.date} • ${item.timestamp}` }) ]) ]); const status = item.status || 'unmarked'; const badge = mk('div', { class: `badge ${status}`, text: status.charAt(0).toUpperCase() + status.slice(1) }); nodes.recentList.appendChild(mk('div', { class: 'row' }, [left, badge])); });
   };
-  mark = function(enrollment, subject, date, status, opts = {}) { if (!state.currentUser) return showToast('Please sign in.'); const rec = userData.attendance[enrollment] = userData.attendance[enrollment] || { dates: {} }; rec.dates[date] = rec.dates[date] || {}; rec.dates[date][subject] = { status, timestamp: new Date().toLocaleTimeString() }; userData.lectureDates[subject] = userData.lectureDates[subject] || []; if (!userData.lectureDates[subject].includes(date)) { userData.lectureDates[subject].push(date); userData.lectureDates[subject].sort(); } userData.recent[subject] = (userData.recent[subject] || []).filter(r => !(r.enrollment === enrollment && r.date === date)); userData.recent[subject].push({ enrollment, student: STUDENTS.find(s => s.enrollmentNumber === enrollment)?.name || enrollment, status, subject, date, timestamp: rec.dates[date][subject].timestamp }); safeSave(); renderAll(); if (!opts.silent) showToast(`Marked ${status} for ${enrollment}`); };
-  clearMark = function(enrollment, subject, date) { if (!state.currentUser) return showToast('Please sign in.'); const rec = userData.attendance[enrollment]; if (!rec?.dates?.[date]?.[subject]) return showToast('No mark to clear'); delete rec.dates[date][subject]; if (!STUDENTS.some(s => userData.attendance[s.enrollmentNumber]?.dates[date]?.[subject])) { userData.lectureDates[subject] = userData.lectureDates[subject].filter(d => d !== date); } userData.recent[subject] = userData.recent[subject].filter(r => !(r.enrollment === enrollment && r.date === date)); safeSave(); renderAll(); showToast('Cleared mark'); };
-  showFound = function(student) {
+  let mark = function(enrollment, subject, date, status, opts = {}) { if (!state.currentUser) return showToast('Please sign in.'); const rec = userData.attendance[enrollment] = userData.attendance[enrollment] || { dates: {} }; rec.dates[date] = rec.dates[date] || {}; rec.dates[date][subject] = { status, timestamp: new Date().toLocaleTimeString() }; userData.lectureDates[subject] = userData.lectureDates[subject] || []; if (!userData.lectureDates[subject].includes(date)) { userData.lectureDates[subject].push(date); userData.lectureDates[subject].sort(); } userData.recent[subject] = (userData.recent[subject] || []).filter(r => !(r.enrollment === enrollment && r.date === date)); userData.recent[subject].push({ enrollment, student: STUDENTS.find(s => s.enrollmentNumber === enrollment)?.name || enrollment, status, subject, date, timestamp: rec.dates[date][subject].timestamp }); safeSave(); renderAll(); if (!opts.silent) showToast(`Marked ${status} for ${enrollment}`); };
+  let clearMark = function(enrollment, subject, date) { if (!state.currentUser) return showToast('Please sign in.'); const rec = userData.attendance[enrollment]; if (!rec?.dates?.[date]?.[subject]) return showToast('No mark to clear'); delete rec.dates[date][subject]; if (!STUDENTS.some(s => userData.attendance[s.enrollmentNumber]?.dates[date]?.[subject])) { userData.lectureDates[subject] = userData.lectureDates[subject].filter(d => d !== date); } userData.recent[subject] = userData.recent[subject].filter(r => !(r.enrollment === enrollment && r.date === date)); safeSave(); renderAll(); showToast('Cleared mark'); };
+  let showFound = function(student) {
     if (!state.currentUser) return; currentStudentEnrollment = student.enrollmentNumber; renderStudents(); nodes.foundArea.innerHTML = ''; const date = nodes.dateInput.value; const subject = nodes.subjectInput.value; const rec = userData.attendance[student.enrollmentNumber]?.dates?.[date]?.[subject];
     const header = mk('div', { style: 'display:flex; justify-content:space-between; align-items:center;' }, [ mk('div', {}, [ mk('div', { style: 'font-weight:800', text: student.name }), mk('div', { class: 'muted', style: 'margin-top:6px', text: student.enrollmentNumber }) ]), mk('div', { style: 'text-align:right;' }, [ mk('div', { class: 'muted', text: `${subject} • ${date}` }), mk('div', { style: 'font-weight:900', text: rec ? rec.status.charAt(0).toUpperCase() + rec.status.slice(1) : '—' }) ]) ]);
     const actions = mk('div', { style: 'margin-top:10px; display:flex; gap:8px;' }); const actionHandler = (action) => { const status = action.toLowerCase(); status === 'clear' ? clearMark(student.enrollmentNumber, subject, date) : mark(student.enrollmentNumber, subject, date, status); const currentIndex = STUDENTS.findIndex(s => s.enrollmentNumber === student.enrollmentNumber); if (currentIndex > -1 && currentIndex < STUDENTS.length - 1) { showFound(STUDENTS[currentIndex + 1]); } else { nodes.foundArea.innerHTML = mk('div', { class: 'muted', text: 'Reached the end of the student list.' }).outerHTML; currentStudentEnrollment = null; renderStudents(); showToast('All students processed!'); } };
